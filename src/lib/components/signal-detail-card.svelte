@@ -1,13 +1,17 @@
 <script lang="ts">
-	import SignalCandlestickChart from '$lib/components/signal-candlestick-chart.svelte';
-	import type { SignalDetailViewModel } from '$lib/signal/signal-detail.types.js';
+	import SignalWeightedChartSection from '$lib/components/signal-weighted-chart-section.svelte';
+	import type {
+		PacificaChartFeedPayload,
+		SignalDetailViewModel
+	} from '$lib/signal/signal-detail.types.js';
 	import { cn } from '$lib/utils.js';
 
 	interface Props {
 		signal: SignalDetailViewModel;
+		pacificaFeed: PacificaChartFeedPayload | null;
 	}
 
-	let { signal }: Props = $props();
+	let { signal, pacificaFeed }: Props = $props();
 
 	type PositionPreset = '10' | '20' | '30' | 'custom';
 
@@ -62,11 +66,15 @@
 	aria-labelledby="signal-heading"
 >
 	<header class="mb-6 space-y-3">
-		<div class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4">
+		<div
+			class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4"
+		>
 			<p class="text-sm font-medium tracking-wide text-[#527E88]">Trading signal</p>
-			<p class="text-sm tabular-nums text-[#527E88]/90">
+			<p class="text-sm text-[#527E88]/90 tabular-nums">
 				Generated
-				<time datetime={signal.generatedAt} class="font-medium text-[#144955]">{generatedLabel}</time>
+				<time datetime={signal.generatedAt} class="font-medium text-[#144955]"
+					>{generatedLabel}</time
+				>
 			</p>
 		</div>
 		<div
@@ -124,21 +132,26 @@
 		</div>
 	</header>
 
-	<section class="mb-6 min-w-0" aria-labelledby="chart-heading">
-		<h2 id="chart-heading" class="mb-3 text-sm font-semibold text-[#144955]">Price</h2>
-		<SignalCandlestickChart candlesticks={signal.candlesticks} />
-	</section>
+	{#key signal.slug}
+		<SignalWeightedChartSection
+			initialCandlesticks={signal.candlesticks}
+			chartError={signal.chartError}
+			feed={pacificaFeed}
+			allocationA={signal.allocationA}
+			allocationB={signal.allocationB}
+		/>
+	{/key}
 
 	<section class="mb-6 space-y-2" aria-labelledby="entry-heading">
 		<h2 id="entry-heading" class="text-sm font-semibold text-[#144955]">Entry price</h2>
-		<p class="text-lg font-medium tabular-nums text-[#144955]">
+		<p class="text-lg font-medium text-[#144955] tabular-nums">
 			{priceFormatter.format(signal.entryPrice)}
 		</p>
 	</section>
 
 	<section class="mb-8 space-y-2" aria-labelledby="desc-heading">
 		<h2 id="desc-heading" class="text-sm font-semibold text-[#144955]">Description</h2>
-		<p class="text-pretty text-[#527E88] leading-relaxed">{signal.description}</p>
+		<p class="leading-relaxed text-pretty text-[#527E88]">{signal.description}</p>
 	</section>
 
 	<footer class="space-y-4">
@@ -200,11 +213,14 @@
 			</div>
 			{#if positionPreset === 'custom'}
 				<div class="flex max-w-xs flex-col gap-1.5">
-					<label for="position-custom-usd" class="text-xs font-medium text-[#527E88]">Amount (USD)</label>
+					<label for="position-custom-usd" class="text-xs font-medium text-[#527E88]"
+						>Amount (USD)</label
+					>
 					<div class="relative">
 						<span
-							class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#527E88]"
-							aria-hidden="true">$</span>
+							class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-[#527E88]"
+							aria-hidden="true">$</span
+						>
 						<input
 							id="position-custom-usd"
 							type="number"
@@ -213,7 +229,7 @@
 							step="any"
 							placeholder="0.00"
 							bind:value={customAmount}
-							class="w-full rounded-xl border border-[#527E88]/25 bg-white/70 py-2.5 pl-7 pr-3 text-sm font-medium tabular-nums text-[#144955] shadow-inner outline-none transition-[box-shadow,border-color] placeholder:text-[#527E88]/50 focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25"
+							class="w-full rounded-xl border border-[#527E88]/25 bg-white/70 py-2.5 pr-3 pl-7 text-sm font-medium text-[#144955] tabular-nums shadow-inner transition-[box-shadow,border-color] outline-none placeholder:text-[#527E88]/50 focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25"
 						/>
 					</div>
 				</div>
@@ -225,10 +241,12 @@
 			class={cn(
 				'w-full rounded-full px-6 py-3.5 text-center text-sm font-semibold text-white shadow-[0_10px_30px_-10px_rgba(34,193,238,0.35)] transition-transform duration-150 md:w-auto',
 				'bg-[#22C1EE] hover:scale-[1.02] hover:brightness-105',
-				'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22C1EE] focus-visible:ring-offset-2 focus-visible:ring-offset-white/80',
+				'focus-visible:ring-2 focus-visible:ring-[#22C1EE] focus-visible:ring-offset-2 focus-visible:ring-offset-white/80 focus-visible:outline-none',
 				!canOpenPosition && 'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
 			)}
-			aria-label="Open position for {pairSummary}, size {positionUsd != null ? priceFormatter.format(positionUsd) : 'not set'}"
+			aria-label="Open position for {pairSummary}, size {positionUsd != null
+				? priceFormatter.format(positionUsd)
+				: 'not set'}"
 			onclick={handleOpenPosition}
 		>
 			Open position

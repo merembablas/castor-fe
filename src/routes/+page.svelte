@@ -19,9 +19,6 @@
 </svelte:head>
 
 <div class="mx-auto max-w-3xl space-y-2">
-	<h1 class="text-2xl font-semibold tracking-tight text-[#144955]">Live signals</h1>
-	<p class="mb-4 text-sm text-[#527E88]">New signals — tap a row for detail.</p>
-
 	<ul class="space-y-3" aria-label="Live signals">
 		{#each DUMMY_LIVE_SIGNALS as signal (signal.slug)}
 			<li>

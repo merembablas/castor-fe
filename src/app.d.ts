@@ -11,7 +11,12 @@ declare global {
 		}
 
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			/** Pacifica REST origin without trailing slash, e.g. https://api.pacifica.fi */
+			pacificaApiBaseUrl: string;
+			/** Optional Bearer token or raw Authorization header value for Pacifica REST */
+			pacificaApiAuthorization: string;
+		}
 		// interface PageData {}
 		// interface PageState {}
 	}

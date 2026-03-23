@@ -1,3 +1,5 @@
+import type { PacificaCandle } from './pacifica/types.js';
+
 /** One OHLC bar for the signal chart (UTC seconds on `time`). */
 export interface SignalCandlestickPoint {
 	time: number;
@@ -23,4 +25,15 @@ export interface SignalDetailViewModel extends ParsedSignalPair {
 	entryPrice: number;
 	description: string;
 	candlesticks: SignalCandlestickPoint[];
+	/** Pacifica REST failure; UI must not imply live candles. */
+	chartError?: string | null;
+}
+
+/** Raw legs + WS URL for client-side merge updates (from server load). */
+export interface PacificaChartFeedPayload {
+	wsUrl: string;
+	pacificaSymbolA: string;
+	pacificaSymbolB: string;
+	legA: PacificaCandle[];
+	legB: PacificaCandle[];
 }

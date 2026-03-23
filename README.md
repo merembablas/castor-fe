@@ -1,0 +1,3 @@
+# Castor FE
+
+Trading Bot.

@@ -1,0 +1,27 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  Product: Frontend for visualizing pair trading charts (spread, ratio, or related
+  series over time). Focus on clear chart readability and data presentation.
+
+  Stack: Svelte 5, SvelteKit, TypeScript, Tailwind CSS, Shadcn-style UI from
+  $lib/components/ui; use cn() from $lib/utils for class composition.
+
+  Conventions: Follow project Cursor rules for Svelte/SvelteKit (runes: $state,
+  $derived, $effect, $props; file-based routing in src/routes; SSR/load where
+  appropriate). Prefer interfaces over types; avoid enums; strict TypeScript.
+
+  UX: Layouts and charts must be responsive and usable on mobile (touch-friendly
+  controls, readable axes/legends, avoid horizontal overflow; test small viewports).
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

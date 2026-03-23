@@ -69,48 +69,57 @@
 				<time datetime={signal.generatedAt} class="font-medium text-[#144955]">{generatedLabel}</time>
 			</p>
 		</div>
-		<div class="flex flex-wrap gap-2" role="list" aria-label="Token allocations">
+		<div
+			class="flex flex-wrap items-center gap-2 gap-y-2"
+			role="group"
+			aria-label="Token allocations: long {signal.tokenA} {signal.allocationA} percent, short {signal.tokenB} {signal.allocationB} percent"
+		>
 			<span
-				role="listitem"
-				class="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/12 px-4 py-1.5 text-sm font-medium text-emerald-950 uppercase"
-				aria-label="Long {signal.tokenA.toUpperCase()}, {signal.allocationA} percent"
+				class="inline-flex items-center gap-1.5 rounded-full bg-[#22C1EE]/15 px-2.5 py-1 text-sm font-semibold text-[#144955] ring-1 ring-[#22C1EE]/35"
+				title="Long leg"
 			>
 				<svg
-					class="size-4 shrink-0 text-emerald-600"
-					viewBox="0 0 24 24"
+					class="h-3.5 w-3.5 shrink-0 text-[#22C1EE]"
+					viewBox="0 0 16 16"
 					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
 					aria-hidden="true"
 				>
-					<polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-					<polyline points="16 7 22 7 22 13" />
+					<path
+						d="M8 3v10M8 3l3 3M8 3L5 6"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
 				</svg>
-				{signal.tokenA.toUpperCase()}
-				<span class="text-emerald-800/80">{signal.allocationA}%</span>
+				<span class="text-[#22C1EE]">{signal.tokenA}</span>
+				<span class="text-[#527E88]">·</span>
+				<span>{signal.allocationA}%</span>
+				<span class="text-[10px] font-medium tracking-wide text-[#527E88] uppercase">Long</span>
 			</span>
+			<span class="text-[#527E88]">/</span>
 			<span
-				role="listitem"
-				class="inline-flex items-center gap-1.5 rounded-full border border-rose-500/35 bg-rose-500/12 px-4 py-1.5 text-sm font-medium text-rose-950 uppercase"
-				aria-label="Short {signal.tokenB.toUpperCase()}, {signal.allocationB} percent"
+				class="inline-flex items-center gap-1.5 rounded-full bg-[#144955]/10 px-2.5 py-1 text-sm font-semibold text-[#144955] ring-1 ring-[#144955]/25"
+				title="Short leg"
 			>
 				<svg
-					class="size-4 shrink-0 text-rose-600"
-					viewBox="0 0 24 24"
+					class="h-3.5 w-3.5 shrink-0 text-[#144955]"
+					viewBox="0 0 16 16"
 					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
 					aria-hidden="true"
 				>
-					<polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />
-					<polyline points="16 17 22 17 22 11" />
+					<path
+						d="M8 13V3M8 13l3-3M8 13l-3-3"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
 				</svg>
-				{signal.tokenB.toUpperCase()}
-				<span class="text-rose-800/80">{signal.allocationB}%</span>
+				<span class="text-[#144955]">{signal.tokenB}</span>
+				<span class="text-[#527E88]">·</span>
+				<span>{signal.allocationB}%</span>
+				<span class="text-[10px] font-medium tracking-wide text-[#527E88] uppercase">Short</span>
 			</span>
 		</div>
 	</header>

@@ -8,7 +8,7 @@
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 <div
-	class="flex min-h-screen flex-col bg-gradient-to-b from-[#E8F7FC] via-[#F2FAFD] to-[#EEF8FB] font-sans text-[#144955] antialiased"
+	class="flex min-h-screen flex-col bg-linear-to-b from-[#E8F7FC] via-[#F2FAFD] to-[#EEF8FB] font-sans text-[#144955] antialiased"
 >
 	<AppHeader />
 	<main class="w-full flex-1 px-4 py-6">

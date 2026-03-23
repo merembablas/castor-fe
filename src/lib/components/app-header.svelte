@@ -22,7 +22,7 @@
 	<div
 		class="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
 	>
-		<p class="text-lg font-semibold tracking-tight text-[#144955]">Castor</p>
+		<p class="text-lg font-semibold tracking-tight text-[#144955]"></p>
 		<nav aria-label="Main" class="flex flex-wrap gap-2">
 			{#each links as { path, label, match } (path)}
 				<a

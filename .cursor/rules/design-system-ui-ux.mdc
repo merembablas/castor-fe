@@ -1,0 +1,24 @@
+---
+alwaysApply: false
+---
+# Design System Rules
+
+## Visual Language
+- **Theme**: Serene, Trustworthy, Oceanic. Use soft teals and blues.
+- **Radius**: All components (Buttons, Inputs, Cards) must have a `border-radius: 9999px` (pills) or `border-radius: 24px` (cards).
+- **Glassmorphism**: Use `backdrop-filter: blur(12px)` and `background: rgba(255, 255, 255, 0.4)` for floating UI elements.
+
+## Component Specifications
+- **Buttons**:
+  - Primary: Solid `#22C1EE` with white text. No sharp corners.
+  - Secondary: Ghost style with `#22C1EE` border or semi-transparent `#B9E9F6` background.
+- **Typography**:
+  - Use Sans-serif fonts (e.g., Inter, Montserrat, or Lexend).
+  - Main headings: Semi-bold, tight letter-spacing.
+  - Color: Use `#144955` for high-contrast text; `#527E88` for secondary text.
+- **Shadows**: Avoid heavy black shadows. Use soft, colored glows: `box-shadow: 0 10px 30px -10px rgba(34, 193, 238, 0.2)`.
+
+## Code Generation Strategy
+- Default to Tailwind CSS where possible.
+- When creating charts, use soft gradients (e.g., `#22C1EE` to `#144955`).
+- Ensure all interactive elements have a `:hover` state that subtly increases brightness or scale (1.02x).

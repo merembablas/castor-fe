@@ -20,9 +20,10 @@ export interface ParsedSignalPair {
 export interface SignalDetailViewModel extends ParsedSignalPair {
 	/** Raw URL slug segment (e.g. `ETH:25-SOL:75`). */
 	slug: string;
-	/** When the signal was generated (ISO 8601). */
-	generatedAt: string;
-	entryPrice: number;
+	/** When the signal was last updated per the active list API (`datetime_signal_occurred`); null if unknown. */
+	updatedAt: string | null;
+	/** User-facing notice when the signals API is configured but data is missing or failed (null = none). */
+	signalsFeedNotice: string | null;
 	description: string;
 	candlesticks: SignalCandlestickPoint[];
 	/** Pacifica REST failure; UI must not imply live candles. */

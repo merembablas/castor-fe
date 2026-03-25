@@ -24,9 +24,10 @@
 		maximumFractionDigits: 2
 	});
 
-	const generatedLabel = $derived.by(() => {
-		const d = new Date(signal.generatedAt);
-		if (Number.isNaN(d.getTime())) return signal.generatedAt;
+	const updatedLabel = $derived.by(() => {
+		if (!signal.updatedAt) return '';
+		const d = new Date(signal.updatedAt);
+		if (Number.isNaN(d.getTime())) return signal.updatedAt;
 		return new Intl.DateTimeFormat(undefined, {
 			dateStyle: 'medium',
 			timeStyle: 'short'
@@ -70,13 +71,16 @@
 			class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-4"
 		>
 			<p class="text-sm font-medium tracking-wide text-[#527E88]">Trading signal</p>
-			<p class="text-sm text-[#527E88]/90 tabular-nums">
-				Generated
-				<time datetime={signal.generatedAt} class="font-medium text-[#144955]"
-					>{generatedLabel}</time
-				>
-			</p>
+			{#if signal.updatedAt}
+				<p class="text-sm text-[#527E88]/90 tabular-nums">
+					Updated
+					<time datetime={signal.updatedAt} class="font-medium text-[#144955]">{updatedLabel}</time>
+				</p>
+			{/if}
 		</div>
+		{#if signal.signalsFeedNotice}
+			<p class="text-xs text-[#527E88]" role="status">{signal.signalsFeedNotice}</p>
+		{/if}
 		<div
 			class="flex flex-wrap items-center gap-2 gap-y-2"
 			role="group"
@@ -141,13 +145,6 @@
 			allocationB={signal.allocationB}
 		/>
 	{/key}
-
-	<section class="mb-6 space-y-2" aria-labelledby="entry-heading">
-		<h2 id="entry-heading" class="text-sm font-semibold text-[#144955]">Entry price</h2>
-		<p class="text-lg font-medium text-[#144955] tabular-nums">
-			{priceFormatter.format(signal.entryPrice)}
-		</p>
-	</section>
 
 	<section class="mb-8 space-y-2" aria-labelledby="desc-heading">
 		<h2 id="desc-heading" class="text-sm font-semibold text-[#144955]">Description</h2>

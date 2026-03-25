@@ -15,6 +15,9 @@
 	let chartApi = $state<IChartApi | null>(null);
 	let hasFitted = $state(false);
 
+	/** Logical bars on each side of the last candle so recent action sits nearer the middle than full fitContent(). */
+	const RECENT_HALF_WINDOW = 40;
+
 	/** Stable while length stays >0 so WS bar updates do not tear down the chart. */
 	const hasBars = $derived(candlesticks.length > 0);
 
@@ -90,7 +93,10 @@
 		if (!s || !c || pts.length === 0) return;
 		s.setData(mapBars(pts));
 		if (!hasFitted) {
-			c.timeScale().fitContent();
+			const lastIdx = pts.length - 1;
+			const from = Math.max(0, lastIdx - RECENT_HALF_WINDOW);
+			const to = lastIdx + RECENT_HALF_WINDOW;
+			c.timeScale().setVisibleLogicalRange({ from, to });
 			hasFitted = true;
 		}
 	});

@@ -41,6 +41,9 @@
     "wrangler": "^4.63.0"
   },
   "dependencies": {
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-phantom": "^0.9.28",
+    "@solana/web3.js": "^1.98.4",
     "lightweight-charts": "^5.1.0"
   }
 }

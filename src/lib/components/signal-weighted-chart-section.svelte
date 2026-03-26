@@ -2,10 +2,8 @@
 	import { onDestroy, onMount } from 'svelte';
 	import SignalCandlestickChart from '$lib/components/signal-candlestick-chart.svelte';
 	import { connectPacificaCandleFeed } from '$lib/signal/pacifica/candle-websocket.js';
-	import {
-		PACIFICA_DEFAULT_INTERVAL,
-		PACIFICA_INITIAL_HISTORY_MS
-	} from '$lib/signal/pacifica/types.js';
+	import { PACIFICA_DEFAULT_INTERVAL } from '$lib/signal/pacifica/types.js';
+	import { fetchPacificaKlineLegsForResync } from '$lib/signal/pacifica/refetch-pacifica-kline-legs-client.js';
 	import { WeightedCandleLiveStore } from '$lib/signal/pacifica/weighted-live-store.js';
 	import type { PacificaCandle } from '$lib/signal/pacifica/types.js';
 	import type {
@@ -43,26 +41,12 @@
 
 	async function refetchLegsAndMerge(): Promise<void> {
 		if (!store || !feed) return;
-		const end = Date.now();
-		const start = end - PACIFICA_INITIAL_HISTORY_MS;
-		const q = new URLSearchParams({
-			interval: PACIFICA_DEFAULT_INTERVAL,
-			start_time: String(start),
-			end_time: String(end)
+		const legs = await fetchPacificaKlineLegsForResync({
+			symbolA: feed.pacificaSymbolA,
+			symbolB: feed.pacificaSymbolB
 		});
-
-		const [resA, resB] = await Promise.all([
-			fetch(`/api/pacifica/kline?symbol=${encodeURIComponent(feed.pacificaSymbolA)}&${q}`),
-			fetch(`/api/pacifica/kline?symbol=${encodeURIComponent(feed.pacificaSymbolB)}&${q}`)
-		]);
-
-		if (!resA.ok || !resB.ok) return;
-
-		const bodyA = (await resA.json()) as { success: boolean; data?: PacificaCandle[] };
-		const bodyB = (await resB.json()) as { success: boolean; data?: PacificaCandle[] };
-		if (!bodyA.success || !bodyB.success || !bodyA.data || !bodyB.data) return;
-
-		store.seedFromRest(bodyA.data, bodyB.data);
+		if (!legs) return;
+		store.seedFromRest(legs.legA, legs.legB);
 		candlesticks = store.getPoints();
 	}
 

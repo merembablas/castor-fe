@@ -49,7 +49,7 @@
 </script>
 
 {#if mainNav.open}
-	<div class="fixed inset-0 z-[200]">
+	<div class="fixed inset-0 z-200">
 		<button
 			type="button"
 			class="absolute inset-0 bg-black/20 backdrop-blur-sm"
@@ -59,8 +59,8 @@
 		<div
 			id={MAIN_NAV_DRAWER_ID}
 			class={cn(
-				'absolute top-0 left-0 flex h-full max-h-[100dvh] w-[min(100vw,20rem)] flex-col border-r border-[#22C1EE]/25',
-				'bg-[rgba(255,255,255,0.4)] backdrop-blur-[12px]',
+				'absolute top-0 left-0 flex h-full max-h-dvh w-[min(100vw,20rem)] flex-col border-r border-[#22C1EE]/25',
+				'bg-[rgba(255,255,255,0.4)] backdrop-blur-md',
 				'shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]'
 			)}
 			role="dialog"

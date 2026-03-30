@@ -36,7 +36,7 @@
 <div class="mx-auto max-w-3xl space-y-2">
 	<h1 class="text-lg font-semibold tracking-tight text-[#144955]">Pairs</h1>
 	<p class="text-sm text-[#527E88]">
-		Cointegration candidates from the pairs feed (cached 15 minutes).
+		Cointegration candidates from the pairs feed.
 	</p>
 
 	{#if listNavigating}

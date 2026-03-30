@@ -1,4 +1,4 @@
-// Bindings for Cloudflare Workers. Regenerate with `npm run cf-typegen` after changing wrangler.toml.
+// Bindings for Cloudflare Workers. Regenerate with `bun run cf-typegen` after changing wrangler.toml.
 interface Env {
 	PACIFICA_API_BASE_URL?: string;
 	PACIFICA_API_AUTHORIZATION?: string;

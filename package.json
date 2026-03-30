@@ -3,17 +3,18 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "packageManager": "bun@1.1.7",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "preview": "npm run build && wrangler dev",
+    "preview": "bun run build && wrangler dev",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
     "gen": "wrangler types",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "bun run build && wrangler deploy",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {
@@ -44,6 +45,7 @@
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-phantom": "^0.9.28",
     "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
     "lightweight-charts": "^5.1.0"
   }
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import SignalWeightedChartSection from '$lib/components/signal-weighted-chart-section.svelte';
 	import {
@@ -6,7 +7,11 @@
 		effectiveMaxLeverage
 	} from '$lib/signal/pacifica/leverage-options.js';
 	import { toPacificaSymbol } from '$lib/signal/pacifica/symbol.js';
+	import { executePairTradeClient } from '$lib/signal/pacifica/execute-pair-trade-client.js';
+	import { lastCandleCloseUsd, minCollateralUsdForPair } from '$lib/signal/pacifica/trade-sizing.js';
+	import { appendActivePairPosition, isSlugActive } from '$lib/signal/active-pair-positions.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
+	import type { PacificaCandle } from '$lib/signal/pacifica/types.js';
 	import type {
 		PacificaChartFeedPayload,
 		SignalDetailViewModel
@@ -58,6 +63,15 @@
 	let accountError = $state<string | null>(null);
 	let accountData = $state<AccountPayload | null>(null);
 
+	let slugActive = $state(false);
+	let tradeBusy = $state(false);
+	let tradeError = $state<string | null>(null);
+
+	/** Mark prices when SSR feed legs lack usable closes (info/prices, then kline). */
+	let supplementalCloseA = $state<number | null>(null);
+	let supplementalCloseB = $state<number | null>(null);
+	let priceLoadError = $state<string | null>(null);
+
 	const priceFormatter = new Intl.NumberFormat(undefined, {
 		style: 'currency',
 		currency: 'USD',
@@ -108,18 +122,70 @@
 		effectiveMax == null ? [] : buildLeverageOptions(effectiveMax)
 	);
 
-	const selectedLeverage = $derived(
-		leverageSelectStr ? Number(leverageSelectStr) : null
+	const selectedLeverage = $derived.by(() => {
+		if (!leverageSelectStr) return null;
+		const n = Number(leverageSelectStr);
+		return Number.isFinite(n) ? n : null;
+	});
+
+	const legCloseA = $derived(
+		pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legA) : null
+	);
+	const legCloseB = $derived(
+		pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legB) : null
 	);
 
-	const strictMinOrderUsd = $derived.by(() => {
+	const markPriceLongUsd = $derived(legCloseA ?? supplementalCloseA);
+	const markPriceShortUsd = $derived(legCloseB ?? supplementalCloseB);
+
+	const pricesReady = $derived(markPriceLongUsd != null && markPriceShortUsd != null);
+
+	const walletReadyForTrade = $derived(
+		solanaWallet.initialized &&
+			solanaWallet.connected &&
+			solanaWallet.publicKey != null &&
+			solanaWallet.adapter != null &&
+			typeof solanaWallet.adapter.signMessage === 'function'
+	);
+
+	const minSuggestedCollateralUsd = $derived.by(() => {
+		if (marketState !== 'ok' || selectedLeverage == null || !pricesReady) return null;
 		const ra = rowsBySymbol[symA];
 		const rb = rowsBySymbol[symB];
 		if (!ra || !rb) return null;
-		const na = Number(ra.minOrderSize);
-		const nb = Number(rb.minOrderSize);
-		if (!Number.isFinite(na) || !Number.isFinite(nb)) return null;
-		return Math.max(na, nb);
+		const pxL = markPriceLongUsd;
+		const pxS = markPriceShortUsd;
+		if (pxL == null || pxS == null) return null;
+		return minCollateralUsdForPair({
+			allocationA: signal.allocationA,
+			allocationB: signal.allocationB,
+			leverage: selectedLeverage,
+			priceLongUsd: pxL,
+			priceShortUsd: pxS,
+			rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
+			rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
+		});
+	});
+
+	const positionBelowExchangeMin = $derived(
+		minSuggestedCollateralUsd != null &&
+			positionUsd != null &&
+			positionUsd + 1e-9 < minSuggestedCollateralUsd
+	);
+
+	const openPositionDisabled = $derived.by(() => {
+		if (!canOpenPosition) return true;
+		if (!walletReadyForTrade) return true;
+		if (marketState !== 'ok') return true;
+		if (selectedLeverage == null) return true;
+		if (tradeBusy) return true;
+		if (slugActive) return true;
+		if (!pricesReady) return true;
+		const ra = rowsBySymbol[symA];
+		const rb = rowsBySymbol[symB];
+		if (!ra || !rb) return true;
+		if (positionBelowExchangeMin) return true;
+		return false;
 	});
 
 	const marginUsedRatio = $derived.by(() => {
@@ -132,6 +198,118 @@
 
 	onMount(() => {
 		solanaWallet.ensureInit();
+		slugActive = isSlugActive(signal.slug);
+	});
+
+	$effect(() => {
+		const s = signal.slug;
+		if (typeof window !== 'undefined') {
+			slugActive = isSlugActive(s);
+		}
+	});
+
+	$effect(() => {
+		if (!browser) return;
+
+		const fromA = legCloseA;
+		const fromB = legCloseB;
+		const a = symA;
+		const b = symB;
+
+		if (fromA != null && fromB != null) {
+			supplementalCloseA = null;
+			supplementalCloseB = null;
+			priceLoadError = null;
+			return;
+		}
+
+		supplementalCloseA = null;
+		supplementalCloseB = null;
+		priceLoadError = null;
+
+		let cancelled = false;
+
+		function parseMark(raw: string | undefined): number | null {
+			if (!raw) return null;
+			const n = Number.parseFloat(raw.trim());
+			return Number.isFinite(n) && n > 0 ? n : null;
+		}
+
+		async function fetchMarksFromInfoPrices(): Promise<{ pa: number | null; pb: number | null }> {
+			const q = new URLSearchParams({ symbols: `${a},${b}` });
+			try {
+				const r = await fetch(`/api/pacifica/prices?${q}`);
+				if (!r.ok) return { pa: null, pb: null };
+				const j = (await r.json()) as {
+					success?: boolean;
+					bySymbol?: Record<string, string>;
+				};
+				if (!j.success || !j.bySymbol) return { pa: null, pb: null };
+				return {
+					pa: parseMark(j.bySymbol[a]),
+					pb: parseMark(j.bySymbol[b])
+				};
+			} catch {
+				return { pa: null, pb: null };
+			}
+		}
+
+		async function fetchLastCloseKline(sym: string): Promise<number | null> {
+			const end = Date.now();
+			const start = end - 14 * 24 * 60 * 60 * 1000;
+			const q = new URLSearchParams({
+				symbol: sym,
+				interval: '1h',
+				start_time: String(start),
+				end_time: String(end)
+			});
+			try {
+				const r = await fetch(`/api/pacifica/kline?${q}`);
+				if (!r.ok) return null;
+				const j = (await r.json()) as {
+					success?: boolean;
+					data?: PacificaCandle[];
+				};
+				if (!j.success || !Array.isArray(j.data) || j.data.length === 0) return null;
+				return lastCandleCloseUsd(j.data);
+			} catch {
+				return null;
+			}
+		}
+
+		void (async () => {
+			let sa: number | null = fromA;
+			let sb: number | null = fromB;
+
+			if (sa == null || sb == null) {
+				const { pa, pb } = await fetchMarksFromInfoPrices();
+				if (cancelled) return;
+				if (sa == null) sa = pa;
+				if (sb == null) sb = pb;
+			}
+
+			if (!cancelled && sa == null) sa = await fetchLastCloseKline(a);
+			if (!cancelled && sb == null) sb = await fetchLastCloseKline(b);
+
+			if (cancelled) return;
+
+			if (fromA == null) supplementalCloseA = sa;
+			else supplementalCloseA = null;
+
+			if (fromB == null) supplementalCloseB = sb;
+			else supplementalCloseB = null;
+
+			const miss: string[] = [];
+			if (fromA == null && sa == null) miss.push(a);
+			if (fromB == null && sb == null) miss.push(b);
+			if (miss.length > 0) {
+				priceLoadError = `Could not load mark prices for ${miss.join(' and ')}. Check symbols and Pacifica connectivity.`;
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	$effect(() => {
@@ -236,9 +414,83 @@
 		positionPreset = preset;
 	}
 
-	function handleOpenPosition() {
-		if (positionUsd === null) return;
-		// Placeholder until trade flow exists
+	function applyMinCollateral() {
+		const m = minSuggestedCollateralUsd;
+		if (m == null) return;
+		positionPreset = 'custom';
+		customAmount = String(Math.ceil(m));
+	}
+
+	/** Fetch the latest mark prices from Pacifica for both symbols immediately before sizing. */
+	async function fetchFreshMarkPrices(): Promise<{ pa: number | null; pb: number | null }> {
+		try {
+			const q = new URLSearchParams({ symbols: `${symA},${symB}` });
+			const r = await fetch(`/api/pacifica/prices?${q}`);
+			if (!r.ok) return { pa: null, pb: null };
+			const j = (await r.json()) as { success?: boolean; bySymbol?: Record<string, string> };
+			if (!j.success || !j.bySymbol) return { pa: null, pb: null };
+			const parse = (v: string | undefined) => {
+				if (!v) return null;
+				const n = Number.parseFloat(v.trim());
+				return Number.isFinite(n) && n > 0 ? n : null;
+			};
+			return { pa: parse(j.bySymbol[symA]), pb: parse(j.bySymbol[symB]) };
+		} catch {
+			return { pa: null, pb: null };
+		}
+	}
+
+	async function handleOpenPosition() {
+		if (positionUsd === null || selectedLeverage == null || openPositionDisabled) return;
+		tradeError = null;
+		const pk = solanaWallet.publicKey;
+		const adapter = solanaWallet.adapter;
+		if (!pk || !adapter || typeof adapter.signMessage !== 'function') {
+			tradeError = 'Connect a wallet that supports signing (e.g. Phantom).';
+			return;
+		}
+		const ra = rowsBySymbol[symA];
+		const rb = rowsBySymbol[symB];
+		if (!ra || !rb) {
+			tradeError = 'Market info is not ready.';
+			return;
+		}
+
+		tradeBusy = true;
+		try {
+			// Always refresh mark prices from Pacifica immediately before sizing so amounts
+			// reflect the current mark and avoid "Price too far from mark" rejections.
+			const { pa, pb } = await fetchFreshMarkPrices();
+			const freshLong = pa ?? markPriceLongUsd;
+			const freshShort = pb ?? markPriceShortUsd;
+
+			if (freshLong == null || freshShort == null) {
+				tradeError = 'Could not load current prices. Try again in a moment.';
+				return;
+			}
+
+			await executePairTradeClient({
+				adapter,
+				account: pk.toBase58(),
+				symbolLong: symA,
+				symbolShort: symB,
+				leverage: selectedLeverage,
+				sizeUsd: positionUsd,
+				allocationA: signal.allocationA,
+				allocationB: signal.allocationB,
+				markPriceLongUsd: freshLong,
+				markPriceShortUsd: freshShort,
+				rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
+				rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
+			});
+			appendActivePairPosition(signal.slug);
+			slugActive = true;
+		} catch (e) {
+			tradeError =
+				e instanceof Error ? e.message : 'Something went wrong while opening the position.';
+		} finally {
+			tradeBusy = false;
+		}
 	}
 
 	const selectShellClass = cn(
@@ -476,7 +728,9 @@
 						id="leverage-select"
 						bind:value={leverageSelectStr}
 						class={selectShellClass}
-						aria-describedby={strictMinOrderUsd != null ? 'order-constraints-hint' : undefined}
+						aria-describedby={marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]
+							? 'order-constraints-hint'
+							: undefined}
 					>
 						{#each leverageOptions as lv (lv)}
 							<option value={String(lv)}>{lv}x</option>
@@ -488,28 +742,66 @@
 			</div>
 		</div>
 
-		{#if strictMinOrderUsd != null && marketState === 'ok'}
-			<p id="order-constraints-hint" class="text-xs text-[#527E88]">
-				Stricter min order (USD, across legs): {priceFormatter.format(strictMinOrderUsd)} · Lot step {symA} /
-				{symB}: {rowsBySymbol[symA]?.lotSize} / {rowsBySymbol[symB]?.lotSize}
+		{#if marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]}
+			<p id="order-constraints-hint" class="text-xs text-[#527E88] space-y-1">
+				<span class="block">
+					Lot size · {symA}: {rowsBySymbol[symA].lotSize}, {symB}: {rowsBySymbol[symB].lotSize}. Min order
+					(base units) · {symA}: {rowsBySymbol[symA].minOrderSize}, {symB}:
+					{rowsBySymbol[symB].minOrderSize}.
+				</span>
+				{#if minSuggestedCollateralUsd != null && selectedLeverage != null}
+					<span class="block text-[#144955]">
+						At {selectedLeverage}×, use at least ~{priceFormatter.format(minSuggestedCollateralUsd)} collateral
+						so each leg meets the exchange minimum after your split ({signal.allocationA}% / {signal.allocationB}%).
+					</span>
+					{#if positionBelowExchangeMin}
+						<button
+							type="button"
+							class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
+							onclick={applyMinCollateral}
+						>
+							Set custom amount to ~{priceFormatter.format(Math.ceil(minSuggestedCollateralUsd))}
+						</button>
+					{/if}
+				{/if}
 			</p>
+		{/if}
+
+		{#if slugActive}
+			<p class="text-sm text-[#144955]" role="status">
+				You already have an active position for this pair in this browser. Clear site data or use another
+				signal to open again.
+			</p>
+		{/if}
+
+		{#if tradeError}
+			<p class="text-sm text-[#144955]" role="alert">{tradeError}</p>
+		{/if}
+
+		{#if solanaWallet.connected && marketState === 'ok' && !pricesReady && !slugActive}
+			{#if priceLoadError}
+				<p class="text-xs text-[#144955]" role="alert">{priceLoadError}</p>
+			{:else}
+				<p class="text-xs text-[#527E88]" role="status">Loading reference prices for order sizing…</p>
+			{/if}
 		{/if}
 
 		<button
 			type="button"
-			disabled={!canOpenPosition}
+			disabled={openPositionDisabled}
 			class={cn(
 				'w-full rounded-full px-6 py-3.5 text-center text-sm font-semibold text-white shadow-[0_10px_30px_-10px_rgba(34,193,238,0.35)] transition-transform duration-150 md:w-auto',
 				'bg-[#22C1EE] hover:scale-[1.02] hover:brightness-105',
 				'focus-visible:ring-2 focus-visible:ring-[#22C1EE] focus-visible:ring-offset-2 focus-visible:ring-offset-white/80 focus-visible:outline-none',
-				!canOpenPosition && 'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
+				openPositionDisabled &&
+					'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
 			)}
 			aria-label="Open position for {pairSummary}, size {positionUsd != null
 				? priceFormatter.format(positionUsd)
 				: 'not set'}{selectedLeverage != null ? `, ${selectedLeverage}x leverage` : ''}"
 			onclick={handleOpenPosition}
 		>
-			Open position
+			{tradeBusy ? 'Opening…' : 'Open position'}
 		</button>
 	</footer>
 </article>

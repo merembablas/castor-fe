@@ -45,3 +45,19 @@ export interface PacificaAccountInfoResponse {
 	error?: string | null;
 	code?: string | null;
 }
+
+/** Row from GET /api/v1/info/prices */
+export interface PacificaPriceRow {
+	symbol: string;
+	mark: string;
+	mid: string;
+	oracle?: string;
+	timestamp?: number;
+}
+
+export interface PacificaPricesListResponse {
+	success: boolean;
+	data: PacificaPriceRow[] | null;
+	error?: string | null;
+	code?: string | null;
+}

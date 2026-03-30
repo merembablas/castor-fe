@@ -3,6 +3,7 @@ interface Env {
 	PACIFICA_API_BASE_URL?: string;
 	PACIFICA_API_AUTHORIZATION?: string;
 	PUBLIC_SIGNALS_API_URL?: string;
+	PUBLIC_ARCHIVES_API_URL?: string;
 	[key: string]: unknown;
 }
 

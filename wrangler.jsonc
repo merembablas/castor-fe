@@ -16,6 +16,7 @@
 	"vars": {
 		"PACIFICA_API_BASE_URL": "https://test-api.pacifica.fi",
 		"PUBLIC_SIGNALS_API_URL": "https://65d8-2400-8902-00-2000-2fff-fe43-b92.ngrok-free.app/signals",
-		"PUBLIC_ARCHIVES_API_URL": "https://65d8-2400-8902-00-2000-2fff-fe43-b92.ngrok-free.app/archives"
+		"PUBLIC_ARCHIVES_API_URL": "https://65d8-2400-8902-00-2000-2fff-fe43-b92.ngrok-free.app/archives",
+		"PAIRS_API_BASE_URL": "https://65d8-2400-8902-00-2000-2fff-fe43-b92.ngrok-free.app"
 	}
 }

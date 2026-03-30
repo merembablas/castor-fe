@@ -2,6 +2,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import AppHeader from '$lib/components/app-header.svelte';
+	import NavDrawerOverlay from '$lib/components/nav-drawer-overlay.svelte';
 
 	let { children } = $props();
 </script>
@@ -11,6 +12,7 @@
 	class="flex min-h-screen flex-col bg-linear-to-b from-[#E8F7FC] via-[#F2FAFD] to-[#EEF8FB] font-sans text-[#144955] antialiased"
 >
 	<AppHeader />
+	<NavDrawerOverlay />
 	<main class="w-full flex-1 px-4 py-6">
 		{@render children()}
 	</main>

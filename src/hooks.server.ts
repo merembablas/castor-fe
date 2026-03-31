@@ -6,6 +6,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 		?.env;
 	event.locals.pacificaApiBaseUrl =
 		platformEnv?.PACIFICA_API_BASE_URL ?? env.PACIFICA_API_BASE_URL ?? 'https://api.pacifica.fi';
+
+	const marketDataOverride = (
+		platformEnv?.PACIFICA_MARKET_DATA_API_BASE_URL ??
+		env.PACIFICA_MARKET_DATA_API_BASE_URL ??
+		''
+	).trim();
+	event.locals.pacificaMarketDataApiBaseUrl =
+		marketDataOverride || event.locals.pacificaApiBaseUrl;
+
 	event.locals.pacificaApiAuthorization =
 		platformEnv?.PACIFICA_API_AUTHORIZATION ?? env.PACIFICA_API_AUTHORIZATION ?? '';
 	return resolve(event);

@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	try {
 		const data = await fetchPacificaKlines({
-			baseUrl: locals.pacificaApiBaseUrl,
+			baseUrl: locals.pacificaMarketDataApiBaseUrl,
 			symbol,
 			interval,
 			startTimeMs,

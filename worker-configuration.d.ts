@@ -1,6 +1,8 @@
 // Bindings for Cloudflare Workers. Regenerate with `bun run cf-typegen` after changing wrangler.toml.
 interface Env {
 	PACIFICA_API_BASE_URL?: string;
+	/** When set, kline/history REST uses this origin; trading proxies use PACIFICA_API_BASE_URL */
+	PACIFICA_MARKET_DATA_API_BASE_URL?: string;
 	PACIFICA_API_AUTHORIZATION?: string;
 	PUBLIC_SIGNALS_API_URL?: string;
 	PUBLIC_NEWS_API_URL?: string;

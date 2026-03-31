@@ -1,8 +1,11 @@
 /**
- * Manual QA (OpenSpec 1.3): With PACIFICA_API_BASE_URL pointing at Pacifica (or mock),
- * - GET merged path: load `/signal/sol:30-eth:70` and confirm network requests to `/api/v1/kline` for SOL and ETH return 200 and `success: true`.
- * - Error: point base URL at invalid host or block network; expect `chartError` set and no fabricated candles.
- * - `success: false` payload: mock server returning `{ success: false, data: null, error: "x" }` should surface as fetch failure.
+ * Kline requests use `PACIFICA_MARKET_DATA_API_BASE_URL` when set (see hooks.server.ts → locals.pacificaMarketDataApiBaseUrl);
+ * otherwise the same origin as `PACIFICA_API_BASE_URL` (trading REST).
+ *
+ * Manual QA: With market-data base pointing at Pacifica (or mock),
+ * - GET merged path: load `/signal/sol:30-eth:70` and confirm `/api/v1/kline` for SOL and ETH return 200 and `success: true`.
+ * - Error: invalid market-data host or blocked network → `chartError` and no fabricated candles.
+ * - `success: false` payload from Pacifica should surface as fetch failure.
  */
 import type { PacificaCandle, PacificaKlineResponse } from './types.js';
 

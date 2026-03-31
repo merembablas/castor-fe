@@ -49,7 +49,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	try {
 		const [rawA, rawB] = await Promise.all([
 			fetchPacificaKlines({
-				baseUrl: locals.pacificaApiBaseUrl,
+				baseUrl: locals.pacificaMarketDataApiBaseUrl,
 				symbol: pacificaSymbolA,
 				interval: PACIFICA_DEFAULT_INTERVAL,
 				startTimeMs: startMs,
@@ -57,7 +57,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				authorization: auth || undefined
 			}),
 			fetchPacificaKlines({
-				baseUrl: locals.pacificaApiBaseUrl,
+				baseUrl: locals.pacificaMarketDataApiBaseUrl,
 				symbol: pacificaSymbolB,
 				interval: PACIFICA_DEFAULT_INTERVAL,
 				startTimeMs: startMs,

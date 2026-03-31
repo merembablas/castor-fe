@@ -102,7 +102,7 @@
 				{/if}
 				{#if solanaWallet.initialized && solanaWallet.walletNotAvailable && !solanaWallet.connected}
 					<p class="text-right text-xs text-[#527E88]" role="status">
-						Phantom extension not detected. Install Phantom to connect.
+						Install wallet ext to connect.
 					</p>
 				{/if}
 				{#if solanaWallet.connectError}

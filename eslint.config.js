@@ -35,5 +35,12 @@ export default defineConfig(
 				svelteConfig
 			}
 		}
+	},
+	{
+		files: ['src/lib/live-signals/live-signal-row.svelte'],
+		rules: {
+			// Third-party news source URLs from API; not in-app routes.
+			'svelte/no-navigation-without-resolve': 'off'
+		}
 	}
 );

@@ -39,7 +39,7 @@ When description content is derived from the signals API row, the system SHALL f
 
 ### Requirement: Signal detail presents pair summary, chart, description, and CTA
 
-The signal detail view SHALL display token A and token B with their respective allocations (token A **long**, token B **short** when aligned with the matched API row per the enrichment requirement), a candlestick chart for **weighted two-leg price ratio** context backed by **Pacifica REST kline history and Pacifica WebSocket candle updates** (see `pacifica-weighted-candles` capability), a textual **description**, and a primary control labeled for opening a position. When a **Solana wallet is connected** and the **Open position** control is **enabled**, activating the control SHALL initiate the **Pacifica trade execution** flow (see `pacifica-trade-execution`) for the current route **slug**, user **position size**, and selected **leverage**. When no wallet is connected, the system SHALL **not** submit trades; the control MAY be disabled or MAY prompt wallet connection per existing UX patterns. The **Open position** control SHALL be **disabled** when the **current slug** is listed as an **active pair position** in browser storage, when **market metadata** required for order sizing is **unavailable** for **either** symbol, or while a trade execution sequence is **in progress**. After a **successful** trade execution sequence, the system SHALL record the slug in browser storage per the **Signal detail tracks active pair positions in browser storage** requirement. The chart SHALL use default candle **`1h`** interval. The layout SHALL remain usable on narrow viewports (no required horizontal scrolling for the main card content). The view SHALL present distinguishable states when market data is loading, unavailable, or failed (e.g. message or skeleton), without implying that placeholder data is live. The view SHALL display an **Updated** datetime label (not **Generated**) when an API-matched row provides **`datetime_signal_occurred`**. The system SHALL **not** display an **entry price** section or value on the detail page. For the **initial** render with a non-empty series, the chart time scale SHALL emphasize **recent** candles (e.g. visible range focused on the trailing portion of the series so the latest bars are not confined to the extreme right edge of the viewport as with a full-history **fit-only** default). The **vertical** order of the main card content after the chart SHALL be: **description** first; then, when applicable, the **Pacifica account summary** (wallet connected) per the **Signal detail shows Pacifica account summary when wallet is connected** requirement; then **position size** and **leverage** controls per the **Signal detail provides leverage selection** requirement; then the **Open position** (or equivalent) **CTA**. The view SHALL present distinguishable states for **trade execution** loading and **failure** (e.g. inline message or non-blocking alert) without implying success when the API rejected the action.
+The signal detail view SHALL display token A and token B with their respective allocations (token A **long**, token B **short** when aligned with the matched API row per the enrichment requirement), a candlestick chart for **weighted two-leg price ratio** context backed by **Pacifica REST kline history and Pacifica WebSocket candle updates** (see `pacifica-weighted-candles` capability), a textual **description**, and a primary control labeled for opening a position. When a **Solana wallet is connected** and the **Open position** control is **enabled**, activating the control SHALL initiate the **Pacifica trade execution** flow (see `pacifica-trade-execution`) for the current route **slug**, user **USD collateral** (position size input), and selected **leverage**. When no wallet is connected, the system SHALL **not** submit trades; the control MAY be disabled or MAY prompt wallet connection per existing UX patterns. The **Open position** control SHALL be **disabled** when the **current slug** is listed as an **active pair position** in browser storage, when **market metadata** required for order sizing is **unavailable** for **either** symbol, or while a trade execution sequence is **in progress**. After a **successful** trade execution sequence, the system SHALL record the slug in browser storage per the **Signal detail tracks active pair positions in browser storage** requirement. The chart SHALL use default candle **`1h`** interval. The layout SHALL remain usable on narrow viewports (no required horizontal scrolling for the main card content). The view SHALL present distinguishable states when market data is loading, unavailable, or failed (e.g. message or skeleton), without implying that placeholder data is live. The view SHALL display an **Updated** datetime label (not **Generated**) when an API-matched row provides **`datetime_signal_occurred`**. The system SHALL **not** display an **entry price** section or value on the detail page. For the **initial** render with a non-empty series, the chart time scale SHALL emphasize **recent** candles (e.g. visible range focused on the trailing portion of the series so the latest bars are not confined to the extreme right edge of the viewport as with a full-history **fit-only** default). The **vertical** order of the main card content after the chart SHALL be: **description** first; then, when applicable, the **Pacifica account summary** (wallet connected) per the **Signal detail shows Pacifica account summary when wallet is connected** requirement; then **USD collateral** and **leverage** controls per the **Signal detail provides a single USD collateral input for opening a position** and **Signal detail provides leverage selection aligned with effective max and five-x steps** requirements; then a **per-order** collateral and total-notional summary per the **Signal detail shows estimated collateral and total notional for the pending open** requirement; then the **Open position** (or equivalent) **CTA**. The view SHALL present distinguishable states for **trade execution** loading and **failure** (e.g. inline message or non-blocking alert) without implying success when the API rejected the action.
 
 #### Scenario: Required content is visible
 
@@ -74,7 +74,7 @@ The signal detail view SHALL display token A and token B with their respective a
 #### Scenario: Account and trading controls follow description
 
 - **WHEN** the user views the signal detail card below the chart
-- **THEN** the **description** appears before any **wallet-specific account** summary, and **position size** with **leverage** appear **above** the **Open position** control
+- **THEN** the **description** appears before any **wallet-specific account** summary, and **collateral** with **leverage** (and the per-order estimate when applicable) appear **above** the **Open position** control
 
 #### Scenario: Open position runs trade flow when wallet connected and control enabled
 
@@ -107,36 +107,74 @@ The system SHALL maintain a **persistent list** of **active pair positions** in 
 
 ### Requirement: Signal detail shows Pacifica account summary when wallet is connected
 
-When a **Solana wallet is connected** and a **wallet public address** is available, the signal detail view SHALL request **Pacifica account info** (documented under **Get Account Info**) for that address and SHALL display **available balance to spend** (using the field or derivation specified by the API and product copy) and **margin usage** as **total margin used relative to account equity**, expressed as a **percentage** such that **100%** means margin used equals equity (maximum stress before liquidation in the user’s framing). This block SHALL appear **below** the textual **description** and **above** the **position size** controls. When the wallet is **not** connected, the system SHALL **not** show this block as live account data. When the request is **in flight**, **fails**, or returns no usable data, the system SHALL show an explicit **loading**, **error**, or **unavailable** state without inventing balances.
+When a **Solana wallet is connected** and a **wallet public address** is available, the signal detail view SHALL request **Pacifica account info** (documented under **Get Account Info**) for that address and SHALL display **available balance to spend** (using the field or derivation specified by the API and product copy) and **margin usage** as **total margin used relative to account equity**, expressed as a **percentage** such that **100%** means margin used equals equity (maximum stress before liquidation in the user’s framing). This block SHALL appear **below** the textual **description** and **above** the **collateral** and **leverage** controls. When the wallet is **not** connected, the system SHALL **not** show this block as live account data. When the request is **in flight**, **fails**, or returns no usable data, the system SHALL show an explicit **loading**, **error**, or **unavailable** state without inventing balances.
 
 #### Scenario: Connected wallet shows balance and margin percent
 
 - **WHEN** the user has connected a wallet and Pacifica account info returns valid **account equity** and **total margin used** (or equivalent mapped fields)
-- **THEN** the signal detail page shows **available to spend** and a **margin used** percentage derived from **total margin used** and **account equity**, placed between the **description** and **position size**
+- **THEN** the signal detail page shows **available to spend** and a **margin used** percentage derived from **total margin used** and **account equity**, placed between the **description** and **collateral** controls
 
 #### Scenario: Wallet disconnected hides account summary
 
 - **WHEN** no wallet address is available
 - **THEN** the Pacifica account summary block is not shown as authenticated account data
 
+### Requirement: Signal detail provides a single USD collateral input for opening a position
+
+The signal detail view SHALL provide **one** control for entering **USD collateral** (the same quantity used as **position size** in `pacifica-trade-execution`: collateral multiplied by selected leverage yields total notional). The system SHALL **not** offer fixed dollar **preset chips** (e.g. $10 / $20 / $30) or a separate **Custom** mode. While market metadata, reference prices, and leverage are available, the control SHALL be **initialized or updated** to at least the **minimum collateral** required for both legs per exchange min order and lot rules and the signal’s allocation split (consistent with `minCollateralUsdForPair`), unless the user has **explicitly edited** the collateral value after load, in which case the system SHALL **not** replace their entry automatically when leverage or prices change. The control SHALL reject or block submit when collateral is below that minimum (existing validation behavior). The collateral control SHALL appear **alongside** the leverage control **above** the **Open position** action per the existing content order requirement.
+
+#### Scenario: No preset size chips
+
+- **WHEN** the user views the open-position section on signal detail
+- **THEN** the system does not show $10, $20, $30, or Custom preset buttons for sizing
+
+#### Scenario: Default at least minimum collateral when user has not customized
+
+- **WHEN** market metadata for both symbols is available, mark prices are available, leverage is set, and the user has not chosen to keep a distinct collateral value after initial presentation
+- **THEN** the collateral field shows a value that is **not less than** the computed minimum collateral for the pair at that leverage and allocations
+
+#### Scenario: Submit still blocked below exchange minimum
+
+- **WHEN** the user enters collateral below the computed minimum for the pair at the selected leverage
+- **THEN** the **Open position** control remains disabled or equivalent and the user sees guidance to increase collateral (consistent with existing minimum-notional behavior)
+
+### Requirement: Signal detail shows estimated collateral and total notional for the pending open
+
+The signal detail view SHALL display **estimated collateral (margin) for this order** in USD: the **same** numeric basis as the validated collateral input used for trade execution. The view SHALL also display **total notional** for the pending open as **collateral × selected leverage** (USD), consistent with `pacifica-trade-execution`. Both displayed values SHALL **update immediately** when the user changes collateral or leverage (before submit). Copy SHALL distinguish this **per-order** estimate from **account-level** margin usage shown in the Pacifica account summary block.
+
+#### Scenario: Values update with collateral input
+
+- **WHEN** the user changes the collateral amount
+- **THEN** the displayed collateral for this order matches the interpreted input and total notional updates to collateral times leverage
+
+#### Scenario: Values update with leverage
+
+- **WHEN** the user changes leverage with a fixed collateral amount
+- **THEN** total notional updates and collateral for this order remains tied to the collateral input
+
 ### Requirement: Signal detail provides leverage selection aligned with effective max and five-x steps
 
-The signal detail view SHALL provide a **leverage** control (combobox, select, or equivalent) **alongside** the **position size** control for opening a position. The set of selectable leverage values SHALL be derived from **effective maximum leverage** (per `pacifica-market-metadata`: minimum of both symbols’ max leverage) as follows: include every **positive integer multiple of 5** from **5** up to **effective max** inclusive **while** not exceeding **effective max**; if **effective max** is **not** already in that set, **append** **effective max** as an additional option; if **effective max** is **less than 5**, the only option SHALL be **effective max** (e.g. a single **3x** choice). The default selection SHALL be the **maximum** allowed value unless a different default is required for compliance. While market metadata for **either** symbol is **loading** or **unavailable**, the control SHALL be **disabled** or show a **non-misleading** placeholder state.
+The signal detail view SHALL provide a **leverage** control **alongside** the **collateral** control for opening a position. The **maximum** selectable leverage SHALL be **effective maximum leverage** (per `pacifica-market-metadata`: the **minimum** of both symbols’ documented **max leverage**). The **minimum** selectable leverage SHALL be **1×**. The control SHALL be implemented as a **slider** (range input or equivalent) with **integer** steps from **1** through **effective max** inclusive. The **default** leverage when metadata becomes available SHALL be **effective max** unless a stricter product or compliance rule applies. While market metadata for **either** symbol is **loading** or **unavailable**, the control SHALL be **disabled** or show a **non-misleading** placeholder state.
 
-#### Scenario: Effective max twenty yields five-x steps through twenty
+#### Scenario: Slider maximum matches smaller of two symbol maxima
 
-- **WHEN** effective maximum leverage is **20**
-- **THEN** the leverage control includes **5x**, **10x**, **15x**, and **20x**
+- **WHEN** symbol A allows max leverage 20 and symbol B allows max leverage 12
+- **THEN** the leverage slider’s maximum is **12**
 
-#### Scenario: Effective max three yields single option
+#### Scenario: Default is effective maximum
 
-- **WHEN** effective maximum leverage is **3**
-- **THEN** the leverage control offers only **3x**
+- **WHEN** effective maximum leverage is **20** and metadata has loaded
+- **THEN** the initial leverage value is **20×** (until the user moves the slider)
 
-#### Scenario: Effective max twelve includes remainder
+#### Scenario: Integer steps across full range
 
-- **WHEN** effective maximum leverage is **12**
-- **THEN** the leverage control includes **5x**, **10x**, and **12x**
+- **WHEN** effective maximum leverage is **7**
+- **THEN** the user can select any integer leverage from **1** through **7**
+
+#### Scenario: Unavailable metadata
+
+- **WHEN** market metadata for either symbol is loading or failed
+- **THEN** the leverage control does not imply a false leverage value
 
 ### Requirement: Visual design aligns with project design system
 

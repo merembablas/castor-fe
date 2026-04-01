@@ -2,10 +2,7 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import SignalWeightedChartSection from '$lib/components/signal-weighted-chart-section.svelte';
-	import {
-		buildLeverageOptions,
-		effectiveMaxLeverage
-	} from '$lib/signal/pacifica/leverage-options.js';
+	import { effectiveMaxLeverage } from '$lib/signal/pacifica/leverage-options.js';
 	import { toPacificaSymbol } from '$lib/signal/pacifica/symbol.js';
 	import { loadPacificaAgent } from '$lib/signal/pacifica/pacifica-agent-storage.js';
 	import { executePairTradeClient } from '$lib/signal/pacifica/execute-pair-trade-client.js';
@@ -52,16 +49,15 @@
 		updatedAt: number;
 	}
 
-	type PositionPreset = '10' | '20' | '30' | 'custom';
-
-	let positionPreset = $state<PositionPreset>('10');
-	let customAmount = $state('');
+	let collateralInputStr = $state('');
+	/** When false, collateral field syncs to computed minimum when leverage/prices change. */
+	let collateralUserEdited = $state(false);
 
 	let marketState = $state<MarketLoadState>('idle');
 	let marketError = $state<string | null>(null);
 	let rowsBySymbol = $state<Record<string, MarketRowPublic>>({});
 
-	let leverageSelectStr = $state('');
+	let leverageInt = $state<number | null>(null);
 
 	let accountState = $state<AccountLoadState>('idle');
 	let accountError = $state<string | null>(null);
@@ -101,10 +97,7 @@
 	});
 
 	const positionUsd = $derived.by(() => {
-		if (positionPreset === '10') return 10;
-		if (positionPreset === '20') return 20;
-		if (positionPreset === '30') return 30;
-		const n = Number.parseFloat(customAmount.replace(',', '.'));
+		const n = Number.parseFloat(collateralInputStr.replace(',', '.'));
 		if (!Number.isFinite(n) || n <= 0) return null;
 		return n;
 	});
@@ -122,13 +115,13 @@
 		return effectiveMaxLeverage(ra.maxLeverage, rb.maxLeverage);
 	});
 
-	const leverageOptions = $derived(effectiveMax == null ? [] : buildLeverageOptions(effectiveMax));
+	const selectedLeverage = $derived(
+		leverageInt != null && Number.isFinite(leverageInt) && leverageInt >= 1 ? leverageInt : null
+	);
 
-	const selectedLeverage = $derived.by(() => {
-		if (!leverageSelectStr) return null;
-		const n = Number(leverageSelectStr);
-		return Number.isFinite(n) ? n : null;
-	});
+	const totalNotionalUsd = $derived(
+		positionUsd != null && selectedLeverage != null ? positionUsd * selectedLeverage : null
+	);
 
 	const legCloseA = $derived(pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legA) : null);
 	const legCloseB = $derived(pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legB) : null);
@@ -353,15 +346,25 @@
 	});
 
 	$effect(() => {
-		const opts = leverageOptions;
-		if (opts.length === 0) {
-			leverageSelectStr = '';
+		const em = effectiveMax;
+		if (em == null || em < 1) {
+			leverageInt = null;
 			return;
 		}
-		const cur = Number(leverageSelectStr);
-		if (!leverageSelectStr || !opts.includes(cur)) {
-			leverageSelectStr = String(opts[opts.length - 1]);
+		const cur = leverageInt;
+		if (cur == null) {
+			leverageInt = em;
+			return;
 		}
+		if (cur < 1) leverageInt = 1;
+		else if (cur > em) leverageInt = em;
+	});
+
+	$effect(() => {
+		if (collateralUserEdited) return;
+		const m = minSuggestedCollateralUsd;
+		if (m == null) return;
+		collateralInputStr = String(Math.ceil(m));
 	});
 
 	$effect(() => {
@@ -409,15 +412,15 @@
 		};
 	});
 
-	function setPositionPreset(preset: PositionPreset) {
-		positionPreset = preset;
+	function onCollateralFieldInput() {
+		collateralUserEdited = true;
 	}
 
 	function applyMinCollateral() {
 		const m = minSuggestedCollateralUsd;
 		if (m == null) return;
-		positionPreset = 'custom';
-		customAmount = String(Math.ceil(m));
+		collateralUserEdited = true;
+		collateralInputStr = String(Math.ceil(m));
 	}
 
 	/** Fetch the latest mark prices from Pacifica for both symbols immediately before sizing. */
@@ -497,11 +500,11 @@
 		}
 	}
 
-	const selectShellClass = cn(
-		'min-w-[5.5rem] rounded-full border border-[#527E88]/25 bg-white/70 px-3 py-2 text-sm font-semibold text-[#144955] tabular-nums',
-		'shadow-inner outline-none transition-[box-shadow,border-color]',
-		'focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25',
-		'disabled:cursor-not-allowed disabled:opacity-50'
+	const rangeTrackClass = cn(
+		'h-2 w-full max-w-[220px] cursor-pointer appearance-none rounded-full bg-[#527E88]/20',
+		'accent-[#22C1EE] disabled:cursor-not-allowed disabled:opacity-50',
+		'[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-[#22C1EE] [&::-webkit-slider-thumb]:shadow-md',
+		'[&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-[#22C1EE]'
 	);
 </script>
 
@@ -638,115 +641,111 @@
 		<div
 			class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
 			role="group"
-			aria-label="Position size and leverage"
+			aria-label="Collateral and leverage for opening a position"
 		>
-			<div class="min-w-0 flex-1 space-y-2" role="group" aria-labelledby="position-size-label">
-				<p id="position-size-label" class="text-sm font-semibold text-[#144955]">Position size</p>
-				<div class="flex flex-wrap gap-2">
-					<button
-						type="button"
-						class={cn(
-							'rounded-full border px-4 py-2 text-sm font-semibold tabular-nums transition-colors',
-							positionPreset === '10'
-								? 'border-[#22C1EE] bg-[#22C1EE]/15 text-[#144955]'
-								: 'border-[#527E88]/25 bg-white/50 text-[#527E88] hover:border-[#22C1EE]/40'
-						)}
-						aria-pressed={positionPreset === '10'}
-						onclick={() => setPositionPreset('10')}
-					>
-						$10
-					</button>
-					<button
-						type="button"
-						class={cn(
-							'rounded-full border px-4 py-2 text-sm font-semibold tabular-nums transition-colors',
-							positionPreset === '20'
-								? 'border-[#22C1EE] bg-[#22C1EE]/15 text-[#144955]'
-								: 'border-[#527E88]/25 bg-white/50 text-[#527E88] hover:border-[#22C1EE]/40'
-						)}
-						aria-pressed={positionPreset === '20'}
-						onclick={() => setPositionPreset('20')}
-					>
-						$20
-					</button>
-					<button
-						type="button"
-						class={cn(
-							'rounded-full border px-4 py-2 text-sm font-semibold tabular-nums transition-colors',
-							positionPreset === '30'
-								? 'border-[#22C1EE] bg-[#22C1EE]/15 text-[#144955]'
-								: 'border-[#527E88]/25 bg-white/50 text-[#527E88] hover:border-[#22C1EE]/40'
-						)}
-						aria-pressed={positionPreset === '30'}
-						onclick={() => setPositionPreset('30')}
-					>
-						$30
-					</button>
-					<button
-						type="button"
-						class={cn(
-							'rounded-full border px-4 py-2 text-sm font-semibold transition-colors',
-							positionPreset === 'custom'
-								? 'border-[#22C1EE] bg-[#22C1EE]/15 text-[#144955]'
-								: 'border-[#527E88]/25 bg-white/50 text-[#527E88] hover:border-[#22C1EE]/40'
-						)}
-						aria-pressed={positionPreset === 'custom'}
-						onclick={() => setPositionPreset('custom')}
-					>
-						Custom
-					</button>
-				</div>
-				{#if positionPreset === 'custom'}
-					<div class="flex max-w-xs flex-col gap-1.5">
-						<label for="position-custom-usd" class="text-xs font-medium text-[#527E88]"
-							>Amount (USD)</label
+			<div class="min-w-0 flex-1 space-y-2" role="group" aria-labelledby="collateral-label">
+				<label
+					id="collateral-label"
+					for="collateral-usd-input"
+					class="text-sm font-semibold text-[#144955]">Collateral (USD)</label
+				>
+				<div class="flex max-w-xs flex-col gap-1.5">
+					<div class="relative">
+						<span
+							class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-[#527E88]"
+							aria-hidden="true">$</span
 						>
-						<div class="relative">
-							<span
-								class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-[#527E88]"
-								aria-hidden="true">$</span
-							>
-							<input
-								id="position-custom-usd"
-								type="number"
-								inputmode="decimal"
-								min="0.01"
-								step="any"
-								placeholder="0.00"
-								bind:value={customAmount}
-								class="w-full rounded-xl border border-[#527E88]/25 bg-white/70 py-2.5 pr-3 pl-7 text-sm font-medium text-[#144955] tabular-nums shadow-inner transition-[box-shadow,border-color] outline-none placeholder:text-[#527E88]/50 focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25"
-							/>
-						</div>
+						<input
+							id="collateral-usd-input"
+							type="number"
+							inputmode="decimal"
+							min="0.01"
+							step="any"
+							placeholder="0.00"
+							bind:value={collateralInputStr}
+							oninput={onCollateralFieldInput}
+							class="w-full rounded-xl border border-[#527E88]/25 bg-white/70 py-2.5 pr-3 pl-7 text-sm font-medium text-[#144955] tabular-nums shadow-inner transition-[box-shadow,border-color] outline-none placeholder:text-[#527E88]/50 focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25"
+							aria-describedby={marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]
+								? 'order-constraints-hint'
+								: undefined}
+						/>
 					</div>
-				{/if}
+				</div>
 			</div>
 
-			<div class="flex shrink-0 flex-col gap-2 sm:items-end">
-				<label for="leverage-select" class="text-sm font-semibold text-[#144955]">Leverage</label>
+			<div class="flex min-w-0 shrink-0 flex-col gap-2 sm:max-w-[min(100%,280px)] sm:items-end">
+				<div class="flex w-full max-w-[220px] items-center justify-between gap-2 sm:justify-end">
+					<label id="leverage-slider-label" for="leverage-slider" class="text-sm font-semibold text-[#144955]"
+						>Leverage</label
+					>
+					{#if marketState === 'ok' && effectiveMax != null && effectiveMax >= 1 && leverageInt != null}
+						<span
+							class="text-sm font-semibold tabular-nums text-[#144955]"
+							aria-hidden="true">{leverageInt}×</span
+						>
+					{/if}
+				</div>
 				{#if marketState === 'loading'}
-					<p id="leverage-select" class="text-sm text-[#527E88]" role="status">Loading…</p>
+					<p id="leverage-slider" class="text-sm text-[#527E88]" role="status">Loading…</p>
 				{:else if marketState === 'error'}
-					<p id="leverage-select" class="max-w-xs text-sm text-[#144955]" role="alert">
+					<p id="leverage-slider" class="max-w-xs text-sm text-[#144955]" role="alert">
 						{marketError ?? 'Unavailable'}
 					</p>
-				{:else if leverageOptions.length > 0}
-					<select
-						id="leverage-select"
-						bind:value={leverageSelectStr}
-						class={selectShellClass}
-						aria-describedby={marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]
+				{:else if effectiveMax != null && effectiveMax >= 1 && leverageInt != null}
+					<input
+						id="leverage-slider"
+						type="range"
+						min={1}
+						max={effectiveMax}
+						step={1}
+						value={leverageInt}
+						disabled={marketState !== 'ok'}
+						class={rangeTrackClass}
+						aria-labelledby="leverage-slider-label"
+						aria-valuemin={1}
+						aria-valuemax={effectiveMax}
+						aria-valuenow={leverageInt}
+						aria-valuetext={`${leverageInt}× leverage`}
+						aria-describedby={rowsBySymbol[symA] && rowsBySymbol[symB]
 							? 'order-constraints-hint'
 							: undefined}
-					>
-						{#each leverageOptions as lv (lv)}
-							<option value={String(lv)}>{lv}x</option>
-						{/each}
-					</select>
+						oninput={(e) => {
+							leverageInt = Number(e.currentTarget.value);
+						}}
+					/>
 				{:else}
-					<p id="leverage-select" class="text-sm text-[#527E88]">No leverage data</p>
+					<p id="leverage-slider" class="text-sm text-[#527E88]">No leverage data</p>
 				{/if}
 			</div>
 		</div>
+
+		{#if positionUsd != null && selectedLeverage != null}
+			<div
+				class="rounded-xl border border-[#527E88]/15 bg-white/30 px-3 py-2.5 text-sm backdrop-blur-sm"
+				aria-labelledby="this-order-estimate-heading"
+			>
+				<h3 id="this-order-estimate-heading" class="mb-1.5 text-xs font-semibold tracking-wide text-[#527E88] uppercase">
+					This order (estimate)
+				</h3>
+				<dl class="grid gap-1 sm:grid-cols-2">
+					<div>
+						<dt class="text-[#527E88]">Collateral (margin)</dt>
+						<dd class="font-semibold text-[#144955] tabular-nums">
+							{priceFormatter.format(positionUsd)}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-[#527E88]">Total notional</dt>
+						<dd class="font-semibold text-[#144955] tabular-nums">
+							{totalNotionalUsd != null ? priceFormatter.format(totalNotionalUsd) : '—'}
+						</dd>
+					</div>
+				</dl>
+				<p class="mt-1.5 text-xs text-[#527E88]">
+					Not the same as account “margin used (vs equity)” above — that reflects your whole Pacifica account.
+				</p>
+			</div>
+		{/if}
 
 		{#if marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]}
 			<p id="order-constraints-hint" class="space-y-1 text-xs text-[#527E88]">
@@ -766,7 +765,7 @@
 							class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
 							onclick={applyMinCollateral}
 						>
-							Set custom amount to ~{priceFormatter.format(Math.ceil(minSuggestedCollateralUsd))}
+							Set collateral to ~{priceFormatter.format(Math.ceil(minSuggestedCollateralUsd))}
 						</button>
 					{/if}
 				{/if}
@@ -811,7 +810,7 @@
 				openPositionDisabled &&
 					'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
 			)}
-			aria-label="Open position for {pairSummary}, size {positionUsd != null
+			aria-label="Open position for {pairSummary}, collateral {positionUsd != null
 				? priceFormatter.format(positionUsd)
 				: 'not set'}{selectedLeverage != null ? `, ${selectedLeverage}x leverage` : ''}"
 			onclick={handleOpenPosition}

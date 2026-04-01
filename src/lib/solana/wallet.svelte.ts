@@ -29,7 +29,13 @@ export class SolanaWalletController {
 	/** True after client bootstrap has attached the adapter. */
 	initialized = $state(false);
 
+	/** Pacifica API agent wallet bound and ready to sign trades (after connect + bind). */
+	pacificaAgentReady = $state(false);
+	pacificaAgentError = $state<string | null>(null);
+	pacificaAgentBinding = $state(false);
+
 	private initPromise: Promise<void> | null = null;
+	private pacificaAgentSetupInFlight: Promise<void> | null = null;
 
 	ensureInit(): void {
 		if (this.initPromise) return;
@@ -78,11 +84,49 @@ export class SolanaWalletController {
 
 	async disconnect(): Promise<void> {
 		this.connectError = null;
+		this.pacificaAgentReady = false;
+		this.pacificaAgentError = null;
+		this.pacificaAgentBinding = false;
 		if (this.initPromise) await this.initPromise;
 		try {
 			await this.adapter?.disconnect();
 		} catch {
 			/* ignore */
+		}
+	}
+
+	/** Run after wallet connects (or on load if already connected). Binds Pacifica agent if needed. */
+	async runPacificaAgentSetup(): Promise<void> {
+		await this.awaitInit();
+		if (this.pacificaAgentSetupInFlight) return this.pacificaAgentSetupInFlight;
+		this.pacificaAgentSetupInFlight = this.runPacificaAgentSetupBody().finally(() => {
+			this.pacificaAgentSetupInFlight = null;
+		});
+		return this.pacificaAgentSetupInFlight;
+	}
+
+	private async runPacificaAgentSetupBody(): Promise<void> {
+		const a = this.adapter;
+		const pk = this.publicKey;
+		if (!a || !pk || typeof a.signMessage !== 'function') {
+			this.pacificaAgentReady = false;
+			this.pacificaAgentError = null;
+			this.pacificaAgentBinding = false;
+			return;
+		}
+		this.pacificaAgentBinding = true;
+		try {
+			const { ensurePacificaAgentBound } =
+				await import('$lib/signal/pacifica/pacifica-ensure-agent-client.js');
+			await ensurePacificaAgentBound(pk.toBase58(), a);
+			this.pacificaAgentReady = true;
+			this.pacificaAgentError = null;
+		} catch (e) {
+			this.pacificaAgentReady = false;
+			this.pacificaAgentError =
+				e instanceof Error ? e.message : 'Could not set up Pacifica API agent wallet';
+		} finally {
+			this.pacificaAgentBinding = false;
 		}
 	}
 }

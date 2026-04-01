@@ -1,22 +1,4 @@
-## Requirements
-
-### Requirement: Trade execution uses total notional split by slug allocations
-
-The system SHALL compute **total notional** for opening a pair position as **position size** (user-entered USD collateral amount) multiplied by **selected leverage** (positive integer). The system SHALL allocate **long** notional to **slug token A** and **short** notional to **slug token B** in proportion to **allocation A** and **allocation B** (integer percentages from the route slug). **Allocation percentages** SHALL sum to **100** for valid slugs.
-
-#### Scenario: Split matches user example
-
-- **WHEN** the slug is `SOL:20-ETH:80`, position size is **10** USD, and leverage is **10**
-- **THEN** total notional is **100** USD, the **long SOL** leg targets **20** USD notional, and the **short ETH** leg targets **80** USD notional before exchange rounding
-
-### Requirement: Leverage is updated for both symbols before orders
-
-The system SHALL call Pacifica **update leverage** (REST) for **each** of the two Pacifica symbols corresponding to slug token A and token B with the **same** leverage value the user selected on the signal detail page, bounded by **effective maximum leverage** from `pacifica-market-metadata`. The system SHALL complete both updates **before** submitting **open** market orders for that action, unless the API documentation permits a single combined call (if not, two sequential or parallel updates are acceptable).
-
-#### Scenario: Two symbols receive selected leverage
-
-- **WHEN** the user selects **10x** and both symbols support at least **10x**
-- **THEN** the system requests leverage **10** for symbol A and **10** for symbol B prior to order submission
+## ADDED Requirements
 
 ### Requirement: Pair open uses two single market orders
 
@@ -36,6 +18,8 @@ The system SHALL perform **update leverage** and **create market order** steps i
 - **WHEN** executing open position after agent bind is complete
 - **THEN** leverage and market order payloads are signed with the agent key, not the browser wallet `signMessage` adapter
 
+## MODIFIED Requirements
+
 ### Requirement: Order quantities respect cached market info
 
 The system SHALL use **cached market info** (per `pacifica-market-metadata`) for each symbol—including **minimum lot**, **minimum tick**, **minimum order size**, and **maximum leverage**—when converting target USD notionals into **order quantities** and any required **price** fields, consistent with Pacifica **tick and lot size** rules. The system SHALL not submit orders that violate documented minima when avoidable through rounding or clamping; if targets cannot be met, the system SHALL refuse submission and show a clear error without partial undocumented rounding.
@@ -54,11 +38,10 @@ The system SHALL treat the **trade action** as successful for persistence purpos
 - **WHEN** leverage updates succeed but either market order API returns an error
 - **THEN** no new active-position record is written for the current slug
 
-### Requirement: Errors are surfaced without silent failure
+## REMOVED Requirements
 
-The system SHALL present a **visible error state** to the user when leverage update or order submission fails, without claiming success. The system SHALL avoid exposing raw secrets or full server traces in the UI.
+### Requirement: Batch market open for long and short legs
 
-#### Scenario: User sees failure after API error
+**Reason:** Replaced by two sequential single-market creates aligned with API Agent Key usage and product direction.
 
-- **WHEN** Pacifica returns an error for leverage or orders
-- **THEN** the Open position flow ends in an error state and the user can retry after correcting input or waiting
+**Migration:** Call Pacifica create-market twice (long, then short—or the order defined in implementation) with separate per-request signatures; remove dependence on `orders/batch` for opening the pair.

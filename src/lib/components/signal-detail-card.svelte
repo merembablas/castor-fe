@@ -7,8 +7,12 @@
 		effectiveMaxLeverage
 	} from '$lib/signal/pacifica/leverage-options.js';
 	import { toPacificaSymbol } from '$lib/signal/pacifica/symbol.js';
+	import { loadPacificaAgent } from '$lib/signal/pacifica/pacifica-agent-storage.js';
 	import { executePairTradeClient } from '$lib/signal/pacifica/execute-pair-trade-client.js';
-	import { lastCandleCloseUsd, minCollateralUsdForPair } from '$lib/signal/pacifica/trade-sizing.js';
+	import {
+		lastCandleCloseUsd,
+		minCollateralUsdForPair
+	} from '$lib/signal/pacifica/trade-sizing.js';
 	import { appendActivePairPosition, isSlugActive } from '$lib/signal/active-pair-positions.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
 	import type { PacificaCandle } from '$lib/signal/pacifica/types.js';
@@ -118,9 +122,7 @@
 		return effectiveMaxLeverage(ra.maxLeverage, rb.maxLeverage);
 	});
 
-	const leverageOptions = $derived(
-		effectiveMax == null ? [] : buildLeverageOptions(effectiveMax)
-	);
+	const leverageOptions = $derived(effectiveMax == null ? [] : buildLeverageOptions(effectiveMax));
 
 	const selectedLeverage = $derived.by(() => {
 		if (!leverageSelectStr) return null;
@@ -128,12 +130,8 @@
 		return Number.isFinite(n) ? n : null;
 	});
 
-	const legCloseA = $derived(
-		pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legA) : null
-	);
-	const legCloseB = $derived(
-		pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legB) : null
-	);
+	const legCloseA = $derived(pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legA) : null);
+	const legCloseB = $derived(pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legB) : null);
 
 	const markPriceLongUsd = $derived(legCloseA ?? supplementalCloseA);
 	const markPriceShortUsd = $derived(legCloseB ?? supplementalCloseB);
@@ -145,7 +143,8 @@
 			solanaWallet.connected &&
 			solanaWallet.publicKey != null &&
 			solanaWallet.adapter != null &&
-			typeof solanaWallet.adapter.signMessage === 'function'
+			typeof solanaWallet.adapter.signMessage === 'function' &&
+			solanaWallet.pacificaAgentReady
 	);
 
 	const minSuggestedCollateralUsd = $derived.by(() => {
@@ -444,9 +443,14 @@
 		if (positionUsd === null || selectedLeverage == null || openPositionDisabled) return;
 		tradeError = null;
 		const pk = solanaWallet.publicKey;
-		const adapter = solanaWallet.adapter;
-		if (!pk || !adapter || typeof adapter.signMessage !== 'function') {
-			tradeError = 'Connect a wallet that supports signing (e.g. Phantom).';
+		if (!pk) {
+			tradeError = 'Connect your wallet first.';
+			return;
+		}
+		const agent = loadPacificaAgent(pk.toBase58());
+		if (!agent?.bound) {
+			tradeError =
+				'Pacifica trading keys are not ready. Approve the bind signature when connecting, or reconnect your wallet.';
 			return;
 		}
 		const ra = rowsBySymbol[symA];
@@ -470,8 +474,8 @@
 			}
 
 			await executePairTradeClient({
-				adapter,
 				account: pk.toBase58(),
+				agentSecretKeyBase58: agent.secretKeyBase58,
 				symbolLong: symA,
 				symbolShort: symB,
 				leverage: selectedLeverage,
@@ -602,24 +606,26 @@
 			{#if accountState === 'loading'}
 				<p class="text-sm text-[#527E88]" role="status">Loading balance…</p>
 			{:else if accountState === 'error'}
-				<p class="text-sm text-[#144955]" role="alert">{accountError ?? 'Could not load account'}</p>
+				<p class="text-sm text-[#144955]" role="alert">
+					{accountError ?? 'Could not load account'}
+				</p>
 			{:else if accountState === 'ok' && accountData}
 				<dl class="grid gap-2 text-sm sm:grid-cols-2">
 					<div>
 						<dt class="text-[#527E88]">Available to spend</dt>
-						<dd class="font-semibold tabular-nums text-[#144955]">
+						<dd class="font-semibold text-[#144955] tabular-nums">
 							{priceFormatter.format(Number(accountData.availableToSpend))}
 						</dd>
 					</div>
 					<div>
 						<dt class="text-[#527E88]">Margin used (vs equity)</dt>
-						<dd class="font-semibold tabular-nums text-[#144955]">
+						<dd class="font-semibold text-[#144955] tabular-nums">
 							{marginUsedRatio != null ? pctFormatter.format(marginUsedRatio) : '—'}
 						</dd>
 					</div>
 					<div class="sm:col-span-2">
 						<dt class="text-xs text-[#527E88]">Account equity</dt>
-						<dd class="text-xs tabular-nums text-[#527E88]">
+						<dd class="text-xs text-[#527E88] tabular-nums">
 							{priceFormatter.format(Number(accountData.accountEquity))}
 						</dd>
 					</div>
@@ -743,10 +749,10 @@
 		</div>
 
 		{#if marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]}
-			<p id="order-constraints-hint" class="text-xs text-[#527E88] space-y-1">
+			<p id="order-constraints-hint" class="space-y-1 text-xs text-[#527E88]">
 				<span class="block">
-					Lot size · {symA}: {rowsBySymbol[symA].lotSize}, {symB}: {rowsBySymbol[symB].lotSize}. Min order
-					(base units) · {symA}: {rowsBySymbol[symA].minOrderSize}, {symB}:
+					Lot size · {symA}: {rowsBySymbol[symA].lotSize}, {symB}: {rowsBySymbol[symB].lotSize}. Min
+					order (base units) · {symA}: {rowsBySymbol[symA].minOrderSize}, {symB}:
 					{rowsBySymbol[symB].minOrderSize}.
 				</span>
 				{#if minSuggestedCollateralUsd != null && selectedLeverage != null}
@@ -769,9 +775,16 @@
 
 		{#if slugActive}
 			<p class="text-sm text-[#144955]" role="status">
-				You already have an active position for this pair in this browser. Clear site data or use another
-				signal to open again.
+				You already have an active position for this pair in this browser. Clear site data or use
+				another signal to open again.
 			</p>
+		{/if}
+
+		{#if solanaWallet.connected && solanaWallet.pacificaAgentBinding}
+			<p class="text-sm text-[#527E88]" role="status">Preparing Pacifica trading keys…</p>
+		{/if}
+		{#if solanaWallet.connected && !solanaWallet.pacificaAgentReady && solanaWallet.pacificaAgentError}
+			<p class="text-sm text-[#144955]" role="alert">{solanaWallet.pacificaAgentError}</p>
 		{/if}
 
 		{#if tradeError}
@@ -782,7 +795,9 @@
 			{#if priceLoadError}
 				<p class="text-xs text-[#144955]" role="alert">{priceLoadError}</p>
 			{:else}
-				<p class="text-xs text-[#527E88]" role="status">Loading reference prices for order sizing…</p>
+				<p class="text-xs text-[#527E88]" role="status">
+					Loading reference prices for order sizing…
+				</p>
 			{/if}
 		{/if}
 

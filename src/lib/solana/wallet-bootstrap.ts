@@ -22,11 +22,15 @@ export function attachPhantomWallet(ctrl: SolanaWalletController, rpcUrl: string
 		ctrl.connected = true;
 		ctrl.connecting = false;
 		ctrl.connectError = null;
+		void ctrl.runPacificaAgentSetup();
 	});
 	a.on('disconnect', () => {
 		ctrl.publicKey = null;
 		ctrl.connected = false;
 		ctrl.connecting = false;
+		ctrl.pacificaAgentReady = false;
+		ctrl.pacificaAgentError = null;
+		ctrl.pacificaAgentBinding = false;
 	});
 	a.on('error', (err) => {
 		if (err instanceof WalletDisconnectedError) return;
@@ -41,4 +45,8 @@ export function attachPhantomWallet(ctrl: SolanaWalletController, rpcUrl: string
 	ctrl.adapter = a;
 	sync();
 	ctrl.initialized = true;
+
+	if (a.connected && a.publicKey) {
+		void ctrl.runPacificaAgentSetup();
+	}
 }

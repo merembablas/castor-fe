@@ -5,7 +5,10 @@
 	import { effectiveMaxLeverage } from '$lib/signal/pacifica/leverage-options.js';
 	import { toPacificaSymbol } from '$lib/signal/pacifica/symbol.js';
 	import { loadPacificaAgent } from '$lib/signal/pacifica/pacifica-agent-storage.js';
-	import { executePairTradeClient } from '$lib/signal/pacifica/execute-pair-trade-client.js';
+	import {
+		executePairTradeClient,
+		type PacificaOpenPositionDryRunCall
+	} from '$lib/signal/pacifica/execute-pair-trade-client.js';
 	import {
 		lastCandleCloseUsd,
 		minCollateralUsdForPair,
@@ -67,6 +70,9 @@
 	let slugActive = $state(false);
 	let tradeBusy = $state(false);
 	let tradeError = $state<string | null>(null);
+	/** When true, Open position builds signed proxy payloads only (no order/leverage POSTs) and skips exchange-min size for the CTA. */
+	let debugDryRunOpenPosition = $state(false);
+	let dryRunPreviewCalls = $state<PacificaOpenPositionDryRunCall[] | null>(null);
 
 	/** Mark prices when SSR feed legs lack usable closes (info/prices, then kline). */
 	let supplementalCloseA = $state<number | null>(null);
@@ -195,7 +201,6 @@
 		const ra = rowsBySymbol[symA];
 		const rb = rowsBySymbol[symB];
 		if (!ra || !rb) return true;
-		if (positionBelowExchangeMin) return true;
 		return false;
 	});
 
@@ -216,6 +221,12 @@
 		const s = signal.slug;
 		if (typeof window !== 'undefined') {
 			slugActive = isSlugActive(s);
+		}
+	});
+
+	$effect(() => {
+		if (!debugDryRunOpenPosition) {
+			dryRunPreviewCalls = null;
 		}
 	});
 
@@ -497,22 +508,44 @@
 				return;
 			}
 
-			await executePairTradeClient({
-				account: pk.toBase58(),
-				agentSecretKeyBase58: agent.secretKeyBase58,
-				symbolLong: symA,
-				symbolShort: symB,
-				leverage: selectedLeverage,
-				sizeUsd: totalAmountUsd / selectedLeverage,
-				allocationA: signal.allocationA,
-				allocationB: signal.allocationB,
-				markPriceLongUsd: freshLong,
-				markPriceShortUsd: freshShort,
-				rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
-				rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
-			});
-			appendActivePairPosition(signal.slug);
-			slugActive = true;
+			if (debugDryRunOpenPosition) {
+				const calls = await executePairTradeClient(
+					{
+						account: pk.toBase58(),
+						agentSecretKeyBase58: agent.secretKeyBase58,
+						symbolLong: symA,
+						symbolShort: symB,
+						leverage: selectedLeverage,
+						sizeUsd: totalAmountUsd / selectedLeverage,
+						allocationA: signal.allocationA,
+						allocationB: signal.allocationB,
+						markPriceLongUsd: freshLong,
+						markPriceShortUsd: freshShort,
+						rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
+						rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
+					},
+					{ dryRun: true }
+				);
+				dryRunPreviewCalls = Array.isArray(calls) ? calls : null;
+			} else {
+				await executePairTradeClient({
+					account: pk.toBase58(),
+					agentSecretKeyBase58: agent.secretKeyBase58,
+					symbolLong: symA,
+					symbolShort: symB,
+					leverage: selectedLeverage,
+					sizeUsd: totalAmountUsd / selectedLeverage,
+					allocationA: signal.allocationA,
+					allocationB: signal.allocationB,
+					markPriceLongUsd: freshLong,
+					markPriceShortUsd: freshShort,
+					rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
+					rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
+				});
+				appendActivePairPosition(signal.slug);
+				slugActive = true;
+				dryRunPreviewCalls = null;
+			}
 		} catch (e) {
 			tradeError =
 				e instanceof Error ? e.message : 'Something went wrong while opening the position.';
@@ -823,6 +856,43 @@
 			<p class="text-sm text-[#144955]" role="alert">{tradeError}</p>
 		{/if}
 
+		<div class="flex flex-wrap items-center gap-2">
+			<label class="flex cursor-pointer items-center gap-2 text-xs text-[#527E88]">
+				<input
+					type="checkbox"
+					bind:checked={debugDryRunOpenPosition}
+					class="size-3.5 rounded border-[#527E88]/40 text-[#22C1EE] focus:ring-[#22C1EE]"
+				/>
+				Debug: preview open-position requests (no API calls)
+			</label>
+		</div>
+
+		{#if dryRunPreviewCalls != null && dryRunPreviewCalls.length > 0}
+			<div
+				class="max-h-[min(70vh,28rem)] w-full overflow-auto rounded-xl border border-amber-200/80 bg-amber-50/90 p-3 text-left shadow-sm"
+				role="region"
+				aria-label="Dry run: Pacifica proxy request bodies"
+			>
+				<p class="mb-2 text-xs font-semibold text-amber-900">
+					Dry run — would POST to these app routes (not sent):
+				</p>
+				<ol class="list-decimal space-y-3 pl-4 text-xs text-amber-950">
+					{#each dryRunPreviewCalls as call (call.step)}
+						<li class="space-y-1">
+							<div class="font-mono font-semibold">
+								{call.step}. {call.method}
+								{call.endpoint}
+								<span class="font-sans font-normal text-amber-800">({call.action})</span>
+							</div>
+							<pre
+								class="overflow-x-auto rounded-lg border border-amber-200/60 bg-white/80 p-2 text-[11px] leading-relaxed text-[#144955]"
+							>{JSON.stringify(call.body, null, 2)}</pre>
+						</li>
+					{/each}
+				</ol>
+			</div>
+		{/if}
+
 		{#if solanaWallet.connected && marketState === 'ok' && !pricesReady && !slugActive}
 			{#if priceLoadError}
 				<p class="text-xs text-[#144955]" role="alert">{priceLoadError}</p>
@@ -848,7 +918,13 @@
 				: 'not set'}{selectedLeverage != null ? `, ${selectedLeverage}x leverage` : ''}"
 			onclick={handleOpenPosition}
 		>
-			{tradeBusy ? 'Opening…' : 'Open position'}
+			{tradeBusy
+				? debugDryRunOpenPosition
+					? 'Building preview…'
+					: 'Opening…'
+				: debugDryRunOpenPosition
+					? 'Preview open-position requests'
+					: 'Open position'}
 		</button>
 	</footer>
 </article>

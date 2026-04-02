@@ -15,6 +15,19 @@ import { planLegSize, splitPairNotionalUsd } from './trade-sizing.js';
 
 const DEFAULT_SLIPPAGE = '3';
 
+export interface PacificaOpenPositionDryRunCall {
+	step: number;
+	action: 'update_leverage' | 'create_market_order';
+	method: 'POST';
+	endpoint: string;
+	body: Record<string, unknown>;
+}
+
+export interface ExecutePairTradeOptions {
+	/** Build signed bodies only; do not call `/api/pacifica/*` for execution. */
+	dryRun?: boolean;
+}
+
 async function postLeverage(body: Record<string, unknown>): Promise<void> {
 	const res = await fetch('/api/pacifica/account/leverage', {
 		method: 'POST',
@@ -83,8 +96,18 @@ export interface ExecutePairTradeInput {
  * Executes a pair trade on Pacifica using API agent signing:
  *  - Updates leverage for both symbols
  *  - Submits two create_market_order requests (long, then short)
+ *
+ * With `dryRun: true`, returns the signed request bodies that would be POSTed to the app proxies
+ * (no network calls to those routes).
+ *
+ * Leg sizes are floored to lot size but not blocked on exchange minimum order size (Pacifica may still reject).
  */
-export async function executePairTradeClient(input: ExecutePairTradeInput): Promise<void> {
+export async function executePairTradeClient(
+	input: ExecutePairTradeInput,
+	options?: ExecutePairTradeOptions
+): Promise<void | PacificaOpenPositionDryRunCall[]> {
+	const dryRun = options?.dryRun === true;
+
 	const agentKp = agentKeypairFromSecretBase58(input.agentSecretKeyBase58);
 	const agentWallet = agentKp.publicKey.toBase58();
 	const secret64 = agentKp.secretKey;
@@ -104,7 +127,8 @@ export async function executePairTradeClient(input: ExecutePairTradeInput): Prom
 		side: 'bid',
 		usdNotional: split.longUsd,
 		priceUsd: input.markPriceLongUsd,
-		row: input.rowLong
+		row: input.rowLong,
+		skipMinOrderCheck: true
 	});
 	if ('error' in longPlan) {
 		throw new Error(longPlan.error);
@@ -115,33 +139,80 @@ export async function executePairTradeClient(input: ExecutePairTradeInput): Prom
 		side: 'ask',
 		usdNotional: split.shortUsd,
 		priceUsd: input.markPriceShortUsd,
-		row: input.rowShort
+		row: input.rowShort,
+		skipMinOrderCheck: true
 	});
 	if ('error' in shortPlan) {
 		throw new Error(shortPlan.error);
 	}
 
+	const calls: PacificaOpenPositionDryRunCall[] = [];
+	const recordOrPost = async (
+		action: PacificaOpenPositionDryRunCall['action'],
+		endpoint: string,
+		post: () => Promise<void>,
+		body: Record<string, unknown>
+	) => {
+		if (dryRun) {
+			calls.push({
+				step: calls.length + 1,
+				action,
+				method: 'POST',
+				endpoint,
+				body
+			});
+		} else {
+			await post();
+		}
+	};
+
 	const levPayloadA = { symbol: input.symbolLong, leverage: input.leverage };
 	const sA = signPacificaMessageWithSecretKey(secret64, 'update_leverage', levPayloadA);
-	await postLeverage({
-		account: input.account,
-		agent_wallet: agentWallet,
-		signature: sA.signature,
-		timestamp: sA.timestamp,
-		expiry_window: sA.expiry_window,
-		...levPayloadA
-	});
+	await recordOrPost(
+		'update_leverage',
+		'/api/pacifica/account/leverage',
+		() =>
+			postLeverage({
+				account: input.account,
+				agent_wallet: agentWallet,
+				signature: sA.signature,
+				timestamp: sA.timestamp,
+				expiry_window: sA.expiry_window,
+				...levPayloadA
+			}),
+		{
+			account: input.account,
+			agent_wallet: agentWallet,
+			signature: sA.signature,
+			timestamp: sA.timestamp,
+			expiry_window: sA.expiry_window,
+			...levPayloadA
+		}
+	);
 
 	const levPayloadB = { symbol: input.symbolShort, leverage: input.leverage };
 	const sB = signPacificaMessageWithSecretKey(secret64, 'update_leverage', levPayloadB);
-	await postLeverage({
-		account: input.account,
-		agent_wallet: agentWallet,
-		signature: sB.signature,
-		timestamp: sB.timestamp,
-		expiry_window: sB.expiry_window,
-		...levPayloadB
-	});
+	await recordOrPost(
+		'update_leverage',
+		'/api/pacifica/account/leverage',
+		() =>
+			postLeverage({
+				account: input.account,
+				agent_wallet: agentWallet,
+				signature: sB.signature,
+				timestamp: sB.timestamp,
+				expiry_window: sB.expiry_window,
+				...levPayloadB
+			}),
+		{
+			account: input.account,
+			agent_wallet: agentWallet,
+			signature: sB.signature,
+			timestamp: sB.timestamp,
+			expiry_window: sB.expiry_window,
+			...levPayloadB
+		}
+	);
 
 	const cidLong = crypto.randomUUID();
 	const marketPayloadLong: Record<string, unknown> = {
@@ -153,14 +224,27 @@ export async function executePairTradeClient(input: ExecutePairTradeInput): Prom
 		client_order_id: cidLong
 	};
 	const mL = signPacificaMessageWithSecretKey(secret64, 'create_market_order', marketPayloadLong);
-	await postCreateMarket({
-		account: input.account,
-		agent_wallet: agentWallet,
-		signature: mL.signature,
-		timestamp: mL.timestamp,
-		expiry_window: mL.expiry_window,
-		...marketPayloadLong
-	});
+	await recordOrPost(
+		'create_market_order',
+		'/api/pacifica/orders/create-market',
+		() =>
+			postCreateMarket({
+				account: input.account,
+				agent_wallet: agentWallet,
+				signature: mL.signature,
+				timestamp: mL.timestamp,
+				expiry_window: mL.expiry_window,
+				...marketPayloadLong
+			}),
+		{
+			account: input.account,
+			agent_wallet: agentWallet,
+			signature: mL.signature,
+			timestamp: mL.timestamp,
+			expiry_window: mL.expiry_window,
+			...marketPayloadLong
+		}
+	);
 
 	const cidShort = crypto.randomUUID();
 	const marketPayloadShort: Record<string, unknown> = {
@@ -172,12 +256,29 @@ export async function executePairTradeClient(input: ExecutePairTradeInput): Prom
 		client_order_id: cidShort
 	};
 	const mS = signPacificaMessageWithSecretKey(secret64, 'create_market_order', marketPayloadShort);
-	await postCreateMarket({
-		account: input.account,
-		agent_wallet: agentWallet,
-		signature: mS.signature,
-		timestamp: mS.timestamp,
-		expiry_window: mS.expiry_window,
-		...marketPayloadShort
-	});
+	await recordOrPost(
+		'create_market_order',
+		'/api/pacifica/orders/create-market',
+		() =>
+			postCreateMarket({
+				account: input.account,
+				agent_wallet: agentWallet,
+				signature: mS.signature,
+				timestamp: mS.timestamp,
+				expiry_window: mS.expiry_window,
+				...marketPayloadShort
+			}),
+		{
+			account: input.account,
+			agent_wallet: agentWallet,
+			signature: mS.signature,
+			timestamp: mS.timestamp,
+			expiry_window: mS.expiry_window,
+			...marketPayloadShort
+		}
+	);
+
+	if (dryRun) {
+		return calls;
+	}
 }

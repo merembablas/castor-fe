@@ -127,8 +127,10 @@ export function planLegSize(input: {
 	usdNotional: number;
 	priceUsd: number;
 	row: MarketSizingRow;
+	/** When true, skip exchange min-order check (e.g. dry-run preview only). */
+	skipMinOrderCheck?: boolean;
 }): { amountStr: string } | { error: string } {
-	const { usdNotional, priceUsd, row } = input;
+	const { usdNotional, priceUsd, row, skipMinOrderCheck } = input;
 	if (!(usdNotional > 0) || !(priceUsd > 0)) {
 		return { error: 'Missing price or notional for sizing.' };
 	}
@@ -142,7 +144,7 @@ export function planLegSize(input: {
 		return { error: `Invalid min order size for ${input.symbol}.` };
 	}
 	const qty = floorToStep(rawQty, lot);
-	if (!(qty >= minQ - 1e-15)) {
+	if (!skipMinOrderCheck && !(qty >= minQ - 1e-15)) {
 		const minBase = minExecutableBaseQty(row);
 		const minLegUsd = minBase != null && priceUsd > 0 ? minBase * priceUsd : null;
 		const legHint =
@@ -152,6 +154,21 @@ export function planLegSize(input: {
 		return {
 			error: `Order size too small for ${input.symbol} after lot rounding (minimum ${minQ} base units on the exchange).${legHint} Increase margin, total amount, or leverage.`
 		};
+	}
+	if (skipMinOrderCheck) {
+		let qtyForFormat = qty;
+		if (!(qtyForFormat > 0) && rawQty > 0) {
+			qtyForFormat = rawQty;
+		}
+		if (!(qtyForFormat > 0) || !Number.isFinite(qtyForFormat)) {
+			return { error: `Order size rounds to zero for ${input.symbol}.` };
+		}
+		const dec = Math.max(decimalPlaces(row.lotSize), decimalPlaces(row.minOrderSize), 8);
+		const amountStr = formatAmountString(qtyForFormat, dec);
+		if (!amountStr) {
+			return { error: `Could not format size for ${input.symbol}.` };
+		}
+		return { amountStr };
 	}
 	const dec = Math.max(decimalPlaces(row.lotSize), decimalPlaces(row.minOrderSize), 8);
 	const amountStr = formatAmountString(qty, dec);

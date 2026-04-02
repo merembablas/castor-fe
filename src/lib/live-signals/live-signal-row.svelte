@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { activePairSlugs } from '$lib/live-signals/active-pair-slugs.svelte.js';
 	import type { LiveSignal } from '$lib/live-signals/live-signals.js';
 	import type { NewsSummaryItem } from '$lib/symbol-news/news-api.types.js';
 	import { teaserOneSentence } from '$lib/symbol-news/normalize-news.js';
@@ -28,6 +29,11 @@
 	const longItems = $derived(newsBySymbol[longKey] ?? []);
 	const shortItems = $derived(newsBySymbol[shortKey] ?? []);
 	const canOpenNewsOverlay = $derived(longItems.length > 0 || shortItems.length > 0);
+
+	const slugKey = $derived(signal.slug.trim());
+	const hasOpenPositionInCache = $derived(
+		activePairSlugs.hydrated && activePairSlugs.activeSlugs.has(slugKey)
+	);
 
 	const longTeaser = $derived(longItems[0]?.summary ? teaserOneSentence(longItems[0].summary) : '');
 	const shortTeaser = $derived(
@@ -122,6 +128,35 @@
 					>Short</span
 				>
 			</span>
+			{#if hasOpenPositionInCache}
+				<span
+					class="inline-flex max-w-full items-center gap-1 rounded-full border border-[#F59E0B]/40 bg-[#FFEDD5]/90 px-2.5 py-1 text-xs font-semibold text-[#78350F] shadow-[0_6px_18px_-8px_rgba(245,158,11,0.28)]"
+					aria-label="This pair is tracked as an open position in your app"
+					title="Tracked open position (from saved pairs)"
+				>
+					<svg
+						class="h-3.5 w-3.5 shrink-0 text-[#D97706]"
+						viewBox="0 0 16 16"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M3 13V6a1 1 0 011-1h1l1.5-2h3L11 5h1a1 1 0 011 1v8"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+						<path
+							d="M3 13h10"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+						/>
+					</svg>
+					<span class="shrink-0 tracking-tight">Position open</span>
+				</span>
+			{/if}
 		</div>
 		<p class="mt-2 text-xs text-[#527E88]">Generated {formatWhen(signal.generatedAt)}</p>
 		<p class="mt-1 line-clamp-3 text-sm text-[#144955]">{signal.description}</p>

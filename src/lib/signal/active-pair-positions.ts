@@ -1,4 +1,6 @@
-const STORAGE_KEY = 'castor:activePairPositions';
+export const ACTIVE_PAIR_POSITIONS_STORAGE_KEY = 'castor:activePairPositions';
+
+const STORAGE_KEY = ACTIVE_PAIR_POSITIONS_STORAGE_KEY;
 
 export interface ActivePairPosition {
 	slug: string;

@@ -68,6 +68,25 @@ The system SHALL present token A as the **long** leg and token B as the **short*
 - **WHEN** the user views a signal row on the home list
 - **THEN** the long leg (token A) and short leg (token B) use non-identical visual styling that includes both semantic labeling (e.g. long/short or equivalent) and differing accent colors or icons
 
+### Requirement: Live signal card shows label when active pair cache contains the signal slug
+
+When the user views the live signals list on `/`, each signal card whose navigable slug exists in **`castor:activePairPositions`** (same slug string as used for `/signal/[slug]` and as stored in **`ActivePairPosition.slug`**) SHALL show a **non-primary** informational **pill** (badge) indicating that the user **already has this pair tracked as an active open position** in app storage. The pill SHALL include **both** a **small icon** and **short text** (not text alone without icon). The pill SHALL use **full pill** radius, **readable contrast**, and **no** heavy black drop shadow; it MAY use a **warm accent** (e.g. amber or peach tones) so the state is distinct from long/short oceanic chips. If the chip is non-interactive, it SHALL remain visually distinct and readable. When the slug is **not** present in active pair storage, the pill SHALL **not** be shown.
+
+#### Scenario: Cached active slug shows pill with icon
+
+- **WHEN** a live signal row’s slug matches an entry in `castor:activePairPositions`
+- **THEN** the card displays the informational pill with icon and short label, using pill radius and styling consistent with the design system (no heavy black shadow, readable contrast)
+
+#### Scenario: No cache entry hides pill
+
+- **WHEN** the signal’s slug is absent from `castor:activePairPositions`
+- **THEN** the card does not show the active-position pill
+
+#### Scenario: Storage update updates label without full page reload
+
+- **WHEN** `castor:activePairPositions` changes in the browser (e.g. another tab via `storage` event or same-tab write after open/close flows)
+- **THEN** the live signals list updates which cards show the pill accordingly on subsequent render without requiring a manual full page reload
+
 ### Requirement: Live signals UI conforms to design-system-ui-ux
 
 The home page experience—the persistent **header**, **navigation**, **signal list** rows or cards, and any **buttons** introduced in this capability—SHALL conform to `.cursor/rules/design-system-ui-ux.mdc`. Normatively:

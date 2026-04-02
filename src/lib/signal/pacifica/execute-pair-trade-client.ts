@@ -69,6 +69,7 @@ export interface ExecutePairTradeInput {
 	symbolLong: string;
 	symbolShort: string;
 	leverage: number;
+	/** Margin in USD: user total notional ÷ leverage (see `splitPairNotionalUsd`). */
 	sizeUsd: number;
 	allocationA: number;
 	allocationB: number;

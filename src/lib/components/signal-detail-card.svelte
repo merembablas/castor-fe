@@ -8,7 +8,8 @@
 	import { executePairTradeClient } from '$lib/signal/pacifica/execute-pair-trade-client.js';
 	import {
 		lastCandleCloseUsd,
-		minCollateralUsdForPair
+		minCollateralUsdForPair,
+		minTotalNotionalUsdFromMinMargin
 	} from '$lib/signal/pacifica/trade-sizing.js';
 	import { appendActivePairPosition, isSlugActive } from '$lib/signal/active-pair-positions.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
@@ -49,9 +50,9 @@
 		updatedAt: number;
 	}
 
-	let collateralInputStr = $state('');
-	/** When false, collateral field syncs to computed minimum when leverage/prices change. */
-	let collateralUserEdited = $state(false);
+	let totalAmountInputStr = $state('');
+	/** When false, total amount syncs to computed minimum total when leverage/prices change. */
+	let totalAmountUserEdited = $state(false);
 
 	let marketState = $state<MarketLoadState>('idle');
 	let marketError = $state<string | null>(null);
@@ -96,13 +97,22 @@
 		}).format(d);
 	});
 
-	const positionUsd = $derived.by(() => {
-		const n = Number.parseFloat(collateralInputStr.replace(',', '.'));
+	/** User-entered total notional (USD) for the pair open. */
+	const totalAmountUsd = $derived.by(() => {
+		const n = Number.parseFloat(totalAmountInputStr.replace(',', '.'));
 		if (!Number.isFinite(n) || n <= 0) return null;
 		return n;
 	});
 
-	const canOpenPosition = $derived(positionUsd !== null);
+	const canOpenPosition = $derived(totalAmountUsd !== null);
+
+	const estimateLongLegUsd = $derived(
+		totalAmountUsd != null ? totalAmountUsd * (signal.allocationA / 100) : null
+	);
+
+	const estimateShortLegUsd = $derived(
+		totalAmountUsd != null ? totalAmountUsd * (signal.allocationB / 100) : null
+	);
 
 	const pairSummary = $derived(
 		`${signal.tokenA} ${signal.allocationA}% / ${signal.tokenB} ${signal.allocationB}%`
@@ -119,8 +129,10 @@
 		leverageInt != null && Number.isFinite(leverageInt) && leverageInt >= 1 ? leverageInt : null
 	);
 
-	const totalNotionalUsd = $derived(
-		positionUsd != null && selectedLeverage != null ? positionUsd * selectedLeverage : null
+	const marginForOrderUsd = $derived(
+		totalAmountUsd != null && selectedLeverage != null && selectedLeverage > 0
+			? totalAmountUsd / selectedLeverage
+			: null
 	);
 
 	const legCloseA = $derived(pacificaFeed != null ? lastCandleCloseUsd(pacificaFeed.legA) : null);
@@ -159,10 +171,17 @@
 		});
 	});
 
+	const minSuggestedTotalUsd = $derived(
+		minSuggestedCollateralUsd != null && selectedLeverage != null
+			? minTotalNotionalUsdFromMinMargin(minSuggestedCollateralUsd, selectedLeverage)
+			: null
+	);
+
 	const positionBelowExchangeMin = $derived(
 		minSuggestedCollateralUsd != null &&
-			positionUsd != null &&
-			positionUsd + 1e-9 < minSuggestedCollateralUsd
+			totalAmountUsd != null &&
+			marginForOrderUsd != null &&
+			marginForOrderUsd + 1e-9 < minSuggestedCollateralUsd
 	);
 
 	const openPositionDisabled = $derived.by(() => {
@@ -361,10 +380,11 @@
 	});
 
 	$effect(() => {
-		if (collateralUserEdited) return;
+		if (totalAmountUserEdited) return;
 		const m = minSuggestedCollateralUsd;
-		if (m == null) return;
-		collateralInputStr = String(Math.ceil(m));
+		const L = selectedLeverage;
+		if (m == null || L == null) return;
+		totalAmountInputStr = String(Math.ceil(minTotalNotionalUsdFromMinMargin(m, L)));
 	});
 
 	$effect(() => {
@@ -412,15 +432,16 @@
 		};
 	});
 
-	function onCollateralFieldInput() {
-		collateralUserEdited = true;
+	function onTotalAmountFieldInput() {
+		totalAmountUserEdited = true;
 	}
 
-	function applyMinCollateral() {
+	function applyMinTotalAmount() {
 		const m = minSuggestedCollateralUsd;
-		if (m == null) return;
-		collateralUserEdited = true;
-		collateralInputStr = String(Math.ceil(m));
+		const L = selectedLeverage;
+		if (m == null || L == null) return;
+		totalAmountUserEdited = true;
+		totalAmountInputStr = String(Math.ceil(minTotalNotionalUsdFromMinMargin(m, L)));
 	}
 
 	/** Fetch the latest mark prices from Pacifica for both symbols immediately before sizing. */
@@ -443,7 +464,7 @@
 	}
 
 	async function handleOpenPosition() {
-		if (positionUsd === null || selectedLeverage == null || openPositionDisabled) return;
+		if (totalAmountUsd === null || selectedLeverage == null || openPositionDisabled) return;
 		tradeError = null;
 		const pk = solanaWallet.publicKey;
 		if (!pk) {
@@ -482,7 +503,7 @@
 				symbolLong: symA,
 				symbolShort: symB,
 				leverage: selectedLeverage,
-				sizeUsd: positionUsd,
+				sizeUsd: totalAmountUsd / selectedLeverage,
 				allocationA: signal.allocationA,
 				allocationB: signal.allocationB,
 				markPriceLongUsd: freshLong,
@@ -641,13 +662,13 @@
 		<div
 			class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
 			role="group"
-			aria-label="Collateral and leverage for opening a position"
+			aria-label="Total amount and leverage for opening a position"
 		>
-			<div class="min-w-0 flex-1 space-y-2" role="group" aria-labelledby="collateral-label">
+			<div class="min-w-0 flex-1 space-y-2" role="group" aria-labelledby="total-amount-label">
 				<label
-					id="collateral-label"
-					for="collateral-usd-input"
-					class="text-sm font-semibold text-[#144955]">Collateral (USD)</label
+					id="total-amount-label"
+					for="total-amount-usd-input"
+					class="text-sm font-semibold text-[#144955]">Total amount (USD)</label
 				>
 				<div class="flex max-w-xs flex-col gap-1.5">
 					<div class="relative">
@@ -656,20 +677,25 @@
 							aria-hidden="true">$</span
 						>
 						<input
-							id="collateral-usd-input"
-							type="number"
+							id="total-amount-usd-input"
+							type="text"
 							inputmode="decimal"
-							min="0.01"
-							step="any"
+							autocomplete="off"
 							placeholder="0.00"
-							bind:value={collateralInputStr}
-							oninput={onCollateralFieldInput}
+							value={totalAmountInputStr}
+							oninput={(e) => {
+								totalAmountInputStr = e.currentTarget.value;
+								onTotalAmountFieldInput();
+							}}
 							class="w-full rounded-xl border border-[#527E88]/25 bg-white/70 py-2.5 pr-3 pl-7 text-sm font-medium text-[#144955] tabular-nums shadow-inner transition-[box-shadow,border-color] outline-none placeholder:text-[#527E88]/50 focus:border-[#22C1EE]/60 focus:ring-2 focus:ring-[#22C1EE]/25"
 							aria-describedby={marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]
 								? 'order-constraints-hint'
 								: undefined}
 						/>
 					</div>
+					<p class="text-xs text-[#527E88]">
+						Notional for the pair; margin for this order is shown below.
+					</p>
 				</div>
 			</div>
 
@@ -719,7 +745,7 @@
 			</div>
 		</div>
 
-		{#if positionUsd != null && selectedLeverage != null}
+		{#if totalAmountUsd != null && selectedLeverage != null && marginForOrderUsd != null}
 			<div
 				class="rounded-xl border border-[#527E88]/15 bg-white/30 px-3 py-2.5 text-sm backdrop-blur-sm"
 				aria-labelledby="this-order-estimate-heading"
@@ -727,17 +753,23 @@
 				<h3 id="this-order-estimate-heading" class="mb-1.5 text-xs font-semibold tracking-wide text-[#527E88] uppercase">
 					This order (estimate)
 				</h3>
-				<dl class="grid gap-1 sm:grid-cols-2">
-					<div>
-						<dt class="text-[#527E88]">Collateral (margin)</dt>
+				<dl class="grid gap-2 sm:grid-cols-2">
+					<div class="sm:col-span-2">
+						<dt class="text-[#527E88]">Margin (this order)</dt>
 						<dd class="font-semibold text-[#144955] tabular-nums">
-							{priceFormatter.format(positionUsd)}
+							{priceFormatter.format(marginForOrderUsd)}
 						</dd>
 					</div>
 					<div>
-						<dt class="text-[#527E88]">Total notional</dt>
+						<dt class="text-[#527E88]">Long {signal.tokenA}</dt>
 						<dd class="font-semibold text-[#144955] tabular-nums">
-							{totalNotionalUsd != null ? priceFormatter.format(totalNotionalUsd) : '—'}
+							{estimateLongLegUsd != null ? priceFormatter.format(estimateLongLegUsd) : '—'}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-[#527E88]">Short {signal.tokenB}</dt>
+						<dd class="font-semibold text-[#144955] tabular-nums">
+							{estimateShortLegUsd != null ? priceFormatter.format(estimateShortLegUsd) : '—'}
 						</dd>
 					</div>
 				</dl>
@@ -754,18 +786,19 @@
 					order (base units) · {symA}: {rowsBySymbol[symA].minOrderSize}, {symB}:
 					{rowsBySymbol[symB].minOrderSize}.
 				</span>
-				{#if minSuggestedCollateralUsd != null && selectedLeverage != null}
+				{#if minSuggestedCollateralUsd != null && selectedLeverage != null && minSuggestedTotalUsd != null}
 					<span class="block text-[#144955]">
-						At {selectedLeverage}×, use at least ~{priceFormatter.format(minSuggestedCollateralUsd)} collateral
-						so each leg meets the exchange minimum after your split ({signal.allocationA}% / {signal.allocationB}%).
+						At {selectedLeverage}×, use at least ~{priceFormatter.format(minSuggestedTotalUsd)} total amount
+						(~{priceFormatter.format(minSuggestedCollateralUsd)} margin) so each leg meets the exchange minimum
+						after your split ({signal.allocationA}% / {signal.allocationB}%).
 					</span>
 					{#if positionBelowExchangeMin}
 						<button
 							type="button"
 							class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
-							onclick={applyMinCollateral}
+							onclick={applyMinTotalAmount}
 						>
-							Set collateral to ~{priceFormatter.format(Math.ceil(minSuggestedCollateralUsd))}
+							Set total amount to ~{priceFormatter.format(Math.ceil(minSuggestedTotalUsd))}
 						</button>
 					{/if}
 				{/if}
@@ -810,8 +843,8 @@
 				openPositionDisabled &&
 					'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
 			)}
-			aria-label="Open position for {pairSummary}, collateral {positionUsd != null
-				? priceFormatter.format(positionUsd)
+			aria-label="Open position for {pairSummary}, total amount {totalAmountUsd != null
+				? priceFormatter.format(totalAmountUsd)
 				: 'not set'}{selectedLeverage != null ? `, ${selectedLeverage}x leverage` : ''}"
 			onclick={handleOpenPosition}
 		>

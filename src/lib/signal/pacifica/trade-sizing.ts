@@ -59,8 +59,9 @@ export function minExecutableBaseQty(row: MarketSizingRow): number | null {
 }
 
 /**
- * Minimum **collateral USD** (position size input) so both legs meet min base + lot after split,
- * at the given leverage. Uses mark prices × min executable base per leg.
+ * Minimum **margin USD** (capital at the given leverage) so both legs meet min base + lot after split.
+ * Signal detail treats user **total notional** as margin × leverage; minimum total = this value × leverage.
+ * Uses mark prices × min executable base per leg.
  */
 export function minCollateralUsdForPair(input: {
 	allocationA: number;
@@ -105,6 +106,11 @@ export function minCollateralUsdForPair(input: {
 	return maxCollateral > 0 ? maxCollateral : null;
 }
 
+/** Minimum total notional (USD) implied by {@link minCollateralUsdForPair} at integer leverage ≥ 1. */
+export function minTotalNotionalUsdFromMinMargin(minMarginUsd: number, leverage: number): number {
+	return minMarginUsd * leverage;
+}
+
 /** Format positive amount for Pacifica `amount` string (no scientific notation). */
 export function formatAmountString(value: number, maxDecimals: number): string {
 	if (!(value > 0) || !Number.isFinite(value)) return '';
@@ -144,7 +150,7 @@ export function planLegSize(input: {
 				? ` This leg needs about ${minLegUsd.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} notional at current price (min ${minQ} base units).`
 				: '';
 		return {
-			error: `Order size too small for ${input.symbol} after lot rounding (minimum ${minQ} base units on the exchange).${legHint} Increase collateral or leverage.`
+			error: `Order size too small for ${input.symbol} after lot rounding (minimum ${minQ} base units on the exchange).${legHint} Increase margin, total amount, or leverage.`
 		};
 	}
 	const dec = Math.max(decimalPlaces(row.lotSize), decimalPlaces(row.minOrderSize), 8);
@@ -155,6 +161,9 @@ export function planLegSize(input: {
 	return { amountStr };
 }
 
+/**
+ * @param sizeUsd Margin in USD (total notional ÷ leverage). Total notional = sizeUsd × leverage.
+ */
 export function splitPairNotionalUsd(input: {
 	sizeUsd: number;
 	leverage: number;

@@ -1,41 +1,4 @@
-## Requirements
-
-### Requirement: Signal URL encodes two tokens and allocations
-
-The system SHALL expose a detail page at `/signal/[slug]` where `slug` matches the pattern `TOKEN_A:ALLOCATION_A-TOKEN_B:ALLOCATION_B`. `TOKEN_A` and `TOKEN_B` SHALL be non-empty strings consisting of alphanumeric characters. `ALLOCATION_A` and `ALLOCATION_B` SHALL be integer percentages in the inclusive range 0–100. The page SHALL interpret the slug as token A with allocation A and token B with allocation B in left-to-right order.
-
-#### Scenario: Valid slug loads detail view
-
-- **WHEN** the user navigates to `/signal/ETH:25-SOL:75`
-- **THEN** the system parses token A as `ETH`, allocation A as `25`, token B as `SOL`, allocation B as `75`, and renders the signal detail view with those values
-
-#### Scenario: Malformed slug is rejected
-
-- **WHEN** the user navigates to a path that does not match the required pattern (e.g. missing a segment, non-numeric allocation, or empty token)
-- **THEN** the system does not render the signal detail content as valid data and SHALL respond with an appropriate error state (e.g. HTTP 404 or an in-app error boundary) without exposing partial misleading allocations
-
-### Requirement: Signal detail enriches from the signals list API when the slug matches an active row
-
-When **`PUBLIC_SIGNALS_API_URL`** is configured, the signal detail **server load** SHALL request the same signals list JSON API used by the home page. The system SHALL locate a response row whose **mapped slug** (long token, rounded long allocation, short token, rounded short allocation—same rules as the home list) equals the route **`slug`**. When such a row exists, the detail view SHALL use that row’s **`token_long`** / **`token_short`** and rounded allocations as the **long** and **short** legs for labels and SHALL use **`datetime_signal_occurred`** as the **updated** timestamp and **`z_score`** / **`snr`** for the **description** text per the metrics formatting requirement below. When no row matches, the system SHALL still parse the URL slug for chart and pair display if the slug is valid, and SHALL NOT invent API timestamps or metrics.
-
-#### Scenario: Matching active row supplies metadata
-
-- **WHEN** the signals API returns a row that maps to the same slug as the current route
-- **THEN** the detail page shows **Updated** with the row’s **`datetime_signal_occurred`**, a description that includes **Z-score** and **SNR** each with at most **two** fractional decimal digits and brief plain-language explanations, and long/short labels consistent with **`token_long`** and **`token_short`**
-
-#### Scenario: API missing or no matching row
-
-- **WHEN** the signals API is not configured, fails, or returns no row matching the route slug
-- **THEN** the detail page does not display API-sourced Z-score, SNR, or API datetime as if they were valid for that signal, and the chart may still load from the URL slug when Pacifica data is available
-
-### Requirement: Signal detail description includes Z-score and SNR with bounded decimals
-
-When description content is derived from the signals API row, the system SHALL format **Z-score** and **SNR** with **at most two** digits after the decimal separator and SHALL include a **brief** explanation for each metric (e.g. spread deviation from typical range; signal strength relative to noise). The copy SHALL remain readable on typical mobile widths (wrapping is acceptable).
-
-#### Scenario: Metrics formatting
-
-- **WHEN** the matched API row provides `z_score` and `snr`
-- **THEN** the rendered description uses those values rounded or formatted to at most two decimal places each and includes short explanatory phrasing for both
+## MODIFIED Requirements
 
 ### Requirement: Signal detail presents pair summary, chart, description, and CTA
 
@@ -90,20 +53,6 @@ The signal detail view SHALL display token A and token B with their respective a
 
 - **WHEN** the trade execution flow fails at leverage update or order submission
 - **THEN** the user sees an explicit error state and the slug is not added to the active pair positions list
-
-### Requirement: Signal detail tracks active pair positions in browser storage
-
-The system SHALL maintain a **persistent list** of **active pair positions** in **browser storage** using an application-defined storage key. Each stored entry SHALL include at minimum the **route slug** string identifying the pair signal (e.g. `SOL:20-ETH:80`) and MAY include a timestamp of when the position was opened. The system SHALL read this list when rendering the signal detail view for a slug and SHALL treat the current slug as **active** if it is present in the list.
-
-#### Scenario: Successful trade adds slug to active list
-
-- **WHEN** the Pacifica trade execution sequence completes successfully for the current slug
-- **THEN** the system adds that slug to the active pair positions list in browser storage
-
-#### Scenario: Page load reflects stored active slug
-
-- **WHEN** the user navigates to a signal detail URL whose slug is already in the active pair positions list
-- **THEN** the UI treats that pair as active for gating the Open position control
 
 ### Requirement: Signal detail shows Pacifica account summary when wallet is connected
 
@@ -175,17 +124,3 @@ The signal detail view SHALL provide a **leverage** control **alongside** the **
 
 - **WHEN** market metadata for either symbol is loading or failed
 - **THEN** the leverage control does not imply a false leverage value
-
-### Requirement: Visual design aligns with project design system
-
-The signal detail page and its card SHALL follow the rules in `.cursor/rules/design-system-ui-ux.mdc`: oceanic teal/blue palette; card corners at 24px radius (or Tailwind equivalent); pill controls at full radius; primary CTA solid `#22C1EE` with white foreground; primary text `#144955` and secondary `#527E88`; soft teal-tinted shadow/glow instead of heavy black shadows; glassmorphism for floating UI where appropriate (`backdrop-filter` blur ~12px with semi-transparent light background); chart coloring using soft gradients between `#22C1EE` and `#144955`; interactive elements SHALL have a hover state that subtly increases brightness or scale to approximately 1.02.
-
-#### Scenario: Primary button matches design system
-
-- **WHEN** the user views the Open position control
-- **THEN** it uses pill shape, primary fill `#22C1EE`, white label, and a visible hover affordance consistent with the design system
-
-#### Scenario: Card and typography match design system
-
-- **WHEN** the user views the signal detail card
-- **THEN** the card uses the prescribed radius and shadow treatment, and headings/body use the specified high-contrast and secondary text colors

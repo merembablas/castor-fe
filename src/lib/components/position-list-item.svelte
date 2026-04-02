@@ -2,7 +2,17 @@
 	import type { OpenPosition } from '$lib/positions/open-position.js';
 	import { cn } from '$lib/utils.js';
 
-	let { position }: { position: OpenPosition } = $props();
+	let {
+		position,
+		closing = false,
+		closeDisabled = false,
+		onClose
+	}: {
+		position: OpenPosition;
+		closing?: boolean;
+		closeDisabled?: boolean;
+		onClose?: () => void | Promise<void>;
+	} = $props();
 
 	const dateFormatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
@@ -52,8 +62,12 @@
 	const pnlUsdStr = $derived(formatSignedUsd(position.unrealizedPnlUsd));
 
 	const closeLabel = $derived(
-		`Close position for ${position.tokenALabel} long and ${position.tokenBLabel} short`
+		closing
+			? `Closing position for ${position.tokenALabel} long and ${position.tokenBLabel} short`
+			: `Close position for ${position.tokenALabel} long and ${position.tokenBLabel} short`
 	);
+
+	const closeBlocked = $derived(closeDisabled || closing || onClose == null);
 </script>
 
 <li>
@@ -151,14 +165,20 @@
 		<div class="flex shrink-0 sm:pl-4">
 			<button
 				type="button"
+				disabled={closeBlocked}
 				class={cn(
 					'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[#22C1EE]/50 bg-white/30 px-4 py-2 text-sm font-medium text-[#144955]',
 					'transition-transform duration-150 hover:scale-[1.02] hover:brightness-[1.03]',
-					'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE] sm:w-auto'
+					'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE] sm:w-auto',
+					closeBlocked && 'pointer-events-none opacity-50 hover:scale-100 hover:brightness-100'
 				)}
 				aria-label={closeLabel}
+				aria-busy={closing ? true : undefined}
+				onclick={() => {
+					if (onClose) void onClose();
+				}}
 			>
-				Close position
+				{closing ? 'Closing…' : 'Close position'}
 			</button>
 		</div>
 	</article>

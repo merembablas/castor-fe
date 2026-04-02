@@ -7,6 +7,8 @@ export interface NormalizedLegPosition {
 	/** Absolute base-asset size (matches order `amount` semantics). */
 	qtyBase: number;
 	entryPrice: number;
+	/** Trimmed REST `amount` string; preferred for reduce-only close orders. */
+	amountRaw: string;
 }
 
 /**
@@ -18,7 +20,8 @@ export function normalizePacificaPositionRow(row: PacificaPositionRow): Normaliz
 	const rawSide = row.side?.trim().toLowerCase();
 	if (rawSide !== 'bid' && rawSide !== 'ask') return null;
 
-	const qty = Number.parseFloat(String(row.amount ?? '').trim());
+	const amountRaw = String(row.amount ?? '').trim();
+	const qty = Number.parseFloat(amountRaw);
 	const entry = Number.parseFloat(String(row.entry_price ?? '').trim());
 	if (!Number.isFinite(qty) || !Number.isFinite(entry) || !(entry > 0)) return null;
 	if (Math.abs(qty) < 1e-12) return null;
@@ -27,7 +30,8 @@ export function normalizePacificaPositionRow(row: PacificaPositionRow): Normaliz
 		symbol: row.symbol.trim().toUpperCase(),
 		side: rawSide,
 		qtyBase: Math.abs(qty),
-		entryPrice: entry
+		entryPrice: entry,
+		amountRaw: amountRaw || String(Math.abs(qty))
 	};
 }
 

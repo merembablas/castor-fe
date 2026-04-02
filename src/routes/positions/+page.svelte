@@ -10,9 +10,15 @@
 	import { positionsRowsToSymbolMap } from '$lib/positions/pacifica-position-normalize.js';
 	import {
 		readActivePairPositions,
+		removeActivePairPosition,
 		writeActivePairPositions
 	} from '$lib/signal/active-pair-positions.js';
+	import {
+		closePairPositionClient,
+		fetchMarketSizingRows
+	} from '$lib/signal/pacifica/close-pair-position-client.js';
 	import { connectPacificaMarkPriceCandleFeed } from '$lib/signal/pacifica/mark-price-candle-websocket.js';
+	import { loadPacificaAgent } from '$lib/signal/pacifica/pacifica-agent-storage.js';
 	import type { PacificaPositionRow } from '$lib/signal/pacifica/rest-types.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
 	import type { PageData } from './$types';
@@ -25,6 +31,8 @@
 	let loadError = $state<string | null>(null);
 	let mergedRows = $state<MergedPairPositionRow[]>([]);
 	let marksBySymbol = $state<Record<string, number>>({});
+	let closingSlug = $state<string | null>(null);
+	let closeError = $state<string | null>(null);
 
 	const openPositions = $derived(
 		mergedRows.map((row) => buildOpenPositionFromMergedRow(row, marksBySymbol))
@@ -85,6 +93,46 @@
 
 		mergedRows = rows;
 		loadState = 'ok';
+	}
+
+	async function handleClosePair(row: MergedPairPositionRow): Promise<void> {
+		closeError = null;
+		const pk = solanaWallet.publicKey;
+		if (!pk) {
+			closeError = 'Connect your wallet first.';
+			return;
+		}
+		if (!solanaWallet.pacificaAgentReady) {
+			closeError =
+				'Pacifica trading keys are not ready. Open a signal, approve the bind signature, and try again.';
+			return;
+		}
+		const agent = loadPacificaAgent(pk.toBase58());
+		if (!agent?.bound) {
+			closeError =
+				'Pacifica trading keys are not ready. Approve the bind signature when connecting, or reconnect your wallet.';
+			return;
+		}
+
+		closingSlug = row.slug;
+		try {
+			const { rowLong, rowShort } = await fetchMarketSizingRows(row.symA, row.symB);
+			await closePairPositionClient({
+				account: pk.toBase58(),
+				agentSecretKeyBase58: agent.secretKeyBase58,
+				row,
+				rowLong,
+				rowShort
+			});
+			// Tracked open pairs: only `castor:activePairPositions` is slug-keyed for this product (audit).
+			removeActivePairPosition(row.slug);
+			await refreshPositions();
+		} catch (e) {
+			closeError =
+				e instanceof Error ? e.message : 'Something went wrong while closing the position.';
+		} finally {
+			closingSlug = null;
+		}
 	}
 
 	$effect(() => {
@@ -179,9 +227,23 @@
 			No open pair positions. Open a trade from a signal to track it here.
 		</p>
 	{:else}
+		{#if closeError}
+			<p
+				class="rounded-[24px] border border-red-200 bg-white/50 p-4 text-sm text-red-700 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+				role="alert"
+			>
+				{closeError}
+			</p>
+		{/if}
 		<ul class="space-y-3" aria-label="Open positions">
 			{#each openPositions as position (position.id)}
-				<PositionListItem {position} />
+				{@const merged = mergedRows.find((r) => r.slug === position.id)}
+				<PositionListItem
+					{position}
+					closing={closingSlug === position.id}
+					closeDisabled={!solanaWallet.pacificaAgentReady}
+					onClose={merged ? () => handleClosePair(merged) : undefined}
+				/>
 			{/each}
 		</ul>
 	{/if}

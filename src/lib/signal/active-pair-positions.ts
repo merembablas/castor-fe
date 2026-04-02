@@ -51,3 +51,12 @@ export function writeActivePairPositions(list: ActivePairPosition[]): void {
 	if (typeof localStorage === 'undefined') return;
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
+
+/** Remove one slug from storage; other entries unchanged. */
+export function removeActivePairPosition(slug: string): void {
+	if (typeof localStorage === 'undefined') return;
+	const s = slug.trim();
+	if (!s) return;
+	const list = readActivePairPositions().filter((e) => e.slug.trim() !== s);
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}

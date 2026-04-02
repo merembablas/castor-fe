@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OpenPosition } from '$lib/positions/dummy-positions.js';
+	import type { OpenPosition } from '$lib/positions/open-position.js';
 	import { cn } from '$lib/utils.js';
 
 	let { position }: { position: OpenPosition } = $props();
@@ -16,9 +16,12 @@
 		maximumFractionDigits: 2
 	});
 
-	const pnlPositive = $derived(position.unrealizedPnlUsd > 0);
-	const pnlNegative = $derived(position.unrealizedPnlUsd < 0);
-	const pnlNeutral = $derived(!pnlPositive && !pnlNegative);
+	const pnlPending = $derived(position.pnlPending === true);
+	const pnlPositive = $derived(!pnlPending && position.unrealizedPnlUsd > 0);
+	const pnlNegative = $derived(!pnlPending && position.unrealizedPnlUsd < 0);
+	const pnlNeutral = $derived(
+		pnlPending || (!pnlPositive && !pnlNegative)
+	);
 
 	function formatWhen(iso: string): string {
 		return dateFormatter.format(new Date(iso));
@@ -111,10 +114,12 @@
 					<span class="text-[10px] font-medium tracking-wide text-[#527E88] uppercase">Short</span>
 				</span>
 			</div>
-			<p class="text-xs text-[#527E88]">
-				<span class="font-medium text-[#144955]">Generated</span>
-				{formatWhen(position.generatedAt)}
-			</p>
+			{#if position.generatedAt}
+				<p class="text-xs text-[#527E88]">
+					<span class="font-medium text-[#144955]">Generated</span>
+					{formatWhen(position.generatedAt)}
+				</p>
+			{/if}
 			<p class="text-xs text-[#527E88]">
 				<span class="font-medium text-[#144955]">Opened</span>
 				{formatWhen(position.openedAt)}
@@ -129,12 +134,18 @@
 					pnlNegative && 'text-red-600',
 					pnlNeutral && 'text-[#527E88]'
 				)}
+				aria-live={pnlPending ? 'polite' : undefined}
 			>
 				<span class="text-sm font-medium text-[#144955]">Unrealized P&L</span>
-				<span class="mx-1.5 font-normal text-[#527E88]">·</span>
-				<span>{pnlPercentStr}</span>
-				<span class="mx-1.5 font-normal text-[#527E88]">·</span>
-				<span>{pnlUsdStr}</span>
+				{#if pnlPending}
+					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+					<span class="font-normal">Updating live…</span>
+				{:else}
+					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+					<span>{pnlPercentStr}</span>
+					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+					<span>{pnlUsdStr}</span>
+				{/if}
 			</p>
 		</div>
 		<div class="flex shrink-0 sm:pl-4">

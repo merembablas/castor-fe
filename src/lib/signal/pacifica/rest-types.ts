@@ -61,3 +61,25 @@ export interface PacificaPricesListResponse {
 	error?: string | null;
 	code?: string | null;
 }
+
+/** Row from GET /api/v1/positions?account=… */
+export interface PacificaPositionRow {
+	symbol: string;
+	/** Pacifica uses `bid` (long) / `ask` (short) per create_market_order. */
+	side: string;
+	amount: string;
+	entry_price: string;
+	margin?: string;
+	funding: string;
+	isolated: boolean;
+	created_at: number;
+	updated_at: number;
+}
+
+export interface PacificaPositionsListResponse {
+	success: boolean;
+	data: PacificaPositionRow[] | null;
+	error?: string | null;
+	code?: string | null;
+	last_order_id?: number;
+}

@@ -45,3 +45,9 @@ export function appendActivePairPosition(slug: string): void {
 	list.push({ slug: s, openedAt: Date.now() });
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
+
+/** Replace the full list (e.g. after reconciling with Pacifica). */
+export function writeActivePairPositions(list: ActivePairPosition[]): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}

@@ -9,11 +9,7 @@
 		executePairTradeClient,
 		type PacificaOpenPositionDryRunCall
 	} from '$lib/signal/pacifica/execute-pair-trade-client.js';
-	import {
-		lastCandleCloseUsd,
-		minCollateralUsdForPair,
-		minTotalNotionalUsdFromMinMargin
-	} from '$lib/signal/pacifica/trade-sizing.js';
+	import { lastCandleCloseUsd, MIN_POSITION_ENTRY_TOTAL_USD } from '$lib/signal/pacifica/trade-sizing.js';
 	import { appendActivePairPosition, isSlugActive } from '$lib/signal/active-pair-positions.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
 	import type { PacificaCandle } from '$lib/signal/pacifica/types.js';
@@ -158,36 +154,8 @@
 			solanaWallet.pacificaAgentReady
 	);
 
-	const minSuggestedCollateralUsd = $derived.by(() => {
-		if (marketState !== 'ok' || selectedLeverage == null || !pricesReady) return null;
-		const ra = rowsBySymbol[symA];
-		const rb = rowsBySymbol[symB];
-		if (!ra || !rb) return null;
-		const pxL = markPriceLongUsd;
-		const pxS = markPriceShortUsd;
-		if (pxL == null || pxS == null) return null;
-		return minCollateralUsdForPair({
-			allocationA: signal.allocationA,
-			allocationB: signal.allocationB,
-			leverage: selectedLeverage,
-			priceLongUsd: pxL,
-			priceShortUsd: pxS,
-			rowLong: { lotSize: ra.lotSize, minOrderSize: ra.minOrderSize },
-			rowShort: { lotSize: rb.lotSize, minOrderSize: rb.minOrderSize }
-		});
-	});
-
-	const minSuggestedTotalUsd = $derived(
-		minSuggestedCollateralUsd != null && selectedLeverage != null
-			? minTotalNotionalUsdFromMinMargin(minSuggestedCollateralUsd, selectedLeverage)
-			: null
-	);
-
-	const positionBelowExchangeMin = $derived(
-		minSuggestedCollateralUsd != null &&
-			totalAmountUsd != null &&
-			marginForOrderUsd != null &&
-			marginForOrderUsd + 1e-9 < minSuggestedCollateralUsd
+	const totalBelowMinimumForOpen = $derived(
+		totalAmountUsd != null && totalAmountUsd + 1e-9 < MIN_POSITION_ENTRY_TOTAL_USD
 	);
 
 	const openPositionDisabled = $derived.by(() => {
@@ -201,6 +169,7 @@
 		const ra = rowsBySymbol[symA];
 		const rb = rowsBySymbol[symB];
 		if (!ra || !rb) return true;
+		if (totalBelowMinimumForOpen) return true;
 		return false;
 	});
 
@@ -392,10 +361,11 @@
 
 	$effect(() => {
 		if (totalAmountUserEdited) return;
-		const m = minSuggestedCollateralUsd;
-		const L = selectedLeverage;
-		if (m == null || L == null) return;
-		totalAmountInputStr = String(Math.ceil(minTotalNotionalUsdFromMinMargin(m, L)));
+		if (marketState !== 'ok') return;
+		const ra = rowsBySymbol[symA];
+		const rb = rowsBySymbol[symB];
+		if (!ra || !rb) return;
+		totalAmountInputStr = String(MIN_POSITION_ENTRY_TOTAL_USD);
 	});
 
 	$effect(() => {
@@ -448,11 +418,8 @@
 	}
 
 	function applyMinTotalAmount() {
-		const m = minSuggestedCollateralUsd;
-		const L = selectedLeverage;
-		if (m == null || L == null) return;
 		totalAmountUserEdited = true;
-		totalAmountInputStr = String(Math.ceil(minTotalNotionalUsdFromMinMargin(m, L)));
+		totalAmountInputStr = String(MIN_POSITION_ENTRY_TOTAL_USD);
 	}
 
 	/** Fetch the latest mark prices from Pacifica for both symbols immediately before sizing. */
@@ -814,26 +781,17 @@
 
 		{#if marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]}
 			<p id="order-constraints-hint" class="space-y-1 text-xs text-[#527E88]">
-				<span class="block">
-					Lot size · {symA}: {rowsBySymbol[symA].lotSize}, {symB}: {rowsBySymbol[symB].lotSize}. Min
-					order (base units) · {symA}: {rowsBySymbol[symA].minOrderSize}, {symB}:
-					{rowsBySymbol[symB].minOrderSize}.
+				<span class="block text-[#144955]">
+					Minimum entry is {priceFormatter.format(MIN_POSITION_ENTRY_TOTAL_USD)} total amount.
 				</span>
-				{#if minSuggestedCollateralUsd != null && selectedLeverage != null && minSuggestedTotalUsd != null}
-					<span class="block text-[#144955]">
-						At {selectedLeverage}×, use at least ~{priceFormatter.format(minSuggestedTotalUsd)} total amount
-						(~{priceFormatter.format(minSuggestedCollateralUsd)} margin) so each leg meets the exchange minimum
-						after your split ({signal.allocationA}% / {signal.allocationB}%).
-					</span>
-					{#if positionBelowExchangeMin}
-						<button
-							type="button"
-							class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
-							onclick={applyMinTotalAmount}
-						>
-							Set total amount to ~{priceFormatter.format(Math.ceil(minSuggestedTotalUsd))}
-						</button>
-					{/if}
+				{#if totalBelowMinimumForOpen}
+					<button
+						type="button"
+						class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
+						onclick={applyMinTotalAmount}
+					>
+						Set total amount to {priceFormatter.format(MIN_POSITION_ENTRY_TOTAL_USD)}
+					</button>
 				{/if}
 			</p>
 		{/if}

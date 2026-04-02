@@ -111,6 +111,9 @@ export function minTotalNotionalUsdFromMinMargin(minMarginUsd: number, leverage:
 	return minMarginUsd * leverage;
 }
 
+/** Product minimum total notional (USD) to open a position from signal detail. */
+export const MIN_POSITION_ENTRY_TOTAL_USD = 22;
+
 /** Format positive amount for Pacifica `amount` string (no scientific notation). */
 export function formatAmountString(value: number, maxDecimals: number): string {
 	if (!(value > 0) || !Number.isFinite(value)) return '';

@@ -1,5 +1,12 @@
 import type { PacificaPositionRow } from '$lib/signal/pacifica/rest-types.js';
 
+function parseFundingPaid(raw: unknown): number {
+	const s = String(raw ?? '').trim();
+	if (!s) return 0;
+	const n = Number.parseFloat(s);
+	return Number.isFinite(n) ? n : 0;
+}
+
 /** Parsed Pacifica position row for P&L: absolute base quantity with explicit side. */
 export interface NormalizedLegPosition {
 	symbol: string;
@@ -9,6 +16,8 @@ export interface NormalizedLegPosition {
 	entryPrice: number;
 	/** Trimmed REST `amount` string; preferred for reduce-only close orders. */
 	amountRaw: string;
+	/** Cumulative funding paid for this leg since open (REST `funding` decimal string). */
+	fundingPaid: number;
 }
 
 /**
@@ -31,7 +40,8 @@ export function normalizePacificaPositionRow(row: PacificaPositionRow): Normaliz
 		side: rawSide,
 		qtyBase: Math.abs(qty),
 		entryPrice: entry,
-		amountRaw: amountRaw || String(Math.abs(qty))
+		amountRaw: amountRaw || String(Math.abs(qty)),
+		fundingPaid: parseFundingPaid(row.funding)
 	};
 }
 

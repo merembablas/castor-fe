@@ -15,6 +15,7 @@ export function buildOpenPositionFromMergedRow(
 	const { usd, pending } = pairUnrealizedPnlUsd(row.legA, row.legB, markA, markB);
 	const denom = pairOpeningNotionalUsd(row.legA, row.legB);
 	const pct = pairUnrealizedPnlPercent(usd, denom, pending);
+	const netFundingPaidUsd = row.legA.fundingPaid + row.legB.fundingPaid;
 
 	return {
 		id: row.slug,
@@ -27,6 +28,7 @@ export function buildOpenPositionFromMergedRow(
 		notionalUsd: denom,
 		unrealizedPnlUsd: usd,
 		unrealizedPnlPercent: pct,
+		netFundingPaidUsd,
 		pnlPending: pending
 	};
 }

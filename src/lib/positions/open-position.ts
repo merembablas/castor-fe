@@ -13,6 +13,8 @@ export interface OpenPosition {
 	notionalUsd: number;
 	unrealizedPnlUsd: number;
 	unrealizedPnlPercent: number;
+	/** Sum of Pacifica per-leg `funding` (funding paid since open) for long + short. */
+	netFundingPaidUsd: number;
 	/** True until first mark price candle received for both legs. */
 	pnlPending?: boolean;
 }

@@ -60,6 +60,7 @@
 
 	const pnlPercentStr = $derived(formatPercent(position.unrealizedPnlPercent));
 	const pnlUsdStr = $derived(formatSignedUsd(position.unrealizedPnlUsd));
+	const netFundingUsdStr = $derived(formatSignedUsd(position.netFundingPaidUsd));
 
 	const closeLabel = $derived(
 		closing
@@ -141,26 +142,33 @@
 			<p class="text-xs text-[#527E88]">
 				Size <span class="font-medium text-[#144955]">{sizeFormatter.format(position.notionalUsd)}</span>
 			</p>
-			<p
-				class={cn(
-					'text-base font-semibold tabular-nums',
-					pnlPositive && 'text-emerald-600',
-					pnlNegative && 'text-red-600',
-					pnlNeutral && 'text-[#527E88]'
-				)}
-				aria-live={pnlPending ? 'polite' : undefined}
-			>
-				<span class="text-sm font-medium text-[#144955]">Unrealized P&L</span>
-				{#if pnlPending}
-					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
-					<span class="font-normal">Updating live…</span>
-				{:else}
-					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
-					<span>{pnlPercentStr}</span>
-					<span class="mx-1.5 font-normal text-[#527E88]">·</span>
-					<span>{pnlUsdStr}</span>
-				{/if}
-			</p>
+			<div class="space-y-0.5">
+				<p
+					class={cn(
+						'text-base font-semibold tabular-nums',
+						pnlPositive && 'text-emerald-600',
+						pnlNegative && 'text-red-600',
+						pnlNeutral && 'text-[#527E88]'
+					)}
+					aria-live={pnlPending ? 'polite' : undefined}
+				>
+					<span class="text-sm font-medium text-[#144955]">Unrealized P&L</span>
+					{#if pnlPending}
+						<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+						<span class="font-normal">Updating live…</span>
+					{:else}
+						<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+						<span>{pnlPercentStr}</span>
+						<span class="mx-1.5 font-normal text-[#527E88]">·</span>
+						<span>{pnlUsdStr}</span>
+					{/if}
+				</p>
+				<p class="text-xs tabular-nums text-[#527E88]">
+					<span class="font-medium text-[#144955]">Net funding paid</span>
+					<span class="mx-1.5">·</span>
+					<span>{netFundingUsdStr}</span>
+				</p>
+			</div>
 		</div>
 		<div class="flex shrink-0 sm:pl-4">
 			<button

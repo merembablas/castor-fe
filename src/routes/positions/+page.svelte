@@ -7,6 +7,7 @@
 		mergeActivePairsWithPacificaPositions,
 		resolveActiveSlug
 	} from '$lib/positions/active-pairs-positions-merge.js';
+	import { tryAppendHistoricalClosedPairFromMergedRow } from '$lib/positions/historical-pair-positions.js';
 	import { positionsRowsToSymbolMap } from '$lib/positions/pacifica-position-normalize.js';
 	import {
 		readActivePairPositions,
@@ -89,6 +90,19 @@
 		const map = positionsRowsToSymbolMap(rowsJson);
 		const { reconciledStored, rows } = mergeActivePairsWithPacificaPositions(validStored, map);
 
+		const prevBySlug = new Map(mergedRows.map((r) => [r.slug.trim(), r]));
+		const closedAt = Date.now();
+		for (const entry of validStored) {
+			const slug = entry.slug.trim();
+			const stillOpen = reconciledStored.some((e) => e.slug.trim() === slug);
+			if (!stillOpen) {
+				const snap = prevBySlug.get(slug);
+				if (snap) {
+					tryAppendHistoricalClosedPairFromMergedRow(snap, marksBySymbol, closedAt);
+				}
+			}
+		}
+
 		writeActivePairPositions(reconciledStored);
 
 		mergedRows = rows;
@@ -124,6 +138,7 @@
 				rowLong,
 				rowShort
 			});
+			tryAppendHistoricalClosedPairFromMergedRow(row, marksBySymbol, Date.now());
 			// Tracked open pairs: only `castor:activePairPositions` is slug-keyed for this product (audit).
 			removeActivePairPosition(row.slug);
 			await refreshPositions();
@@ -204,15 +219,21 @@
 
 <div class="mx-auto max-w-3xl space-y-2">
 	{#if !solanaWallet.initialized}
-		<p class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]">
+		<p
+			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+		>
 			Loading wallet…
 		</p>
 	{:else if !solanaWallet.connected || !solanaWallet.publicKey}
-		<p class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]">
+		<p
+			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+		>
 			Connect your Solana wallet to see open pair positions from Pacifica.
 		</p>
 	{:else if loadState === 'loading' && mergedRows.length === 0}
-		<p class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]">
+		<p
+			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+		>
 			Loading positions…
 		</p>
 	{:else if loadState === 'error'}
@@ -223,7 +244,9 @@
 			{loadError ?? 'Could not load positions.'}
 		</p>
 	{:else if openPositions.length === 0}
-		<p class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]">
+		<p
+			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+		>
 			No open pair positions. Open a trade from a signal to track it here.
 		</p>
 	{:else}

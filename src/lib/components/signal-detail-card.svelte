@@ -9,7 +9,12 @@
 		executePairTradeClient,
 		type PacificaOpenPositionDryRunCall
 	} from '$lib/signal/pacifica/execute-pair-trade-client.js';
-	import { lastCandleCloseUsd, MIN_POSITION_ENTRY_TOTAL_USD } from '$lib/signal/pacifica/trade-sizing.js';
+	import {
+		lastCandleCloseUsd,
+		MIN_POSITION_ENTRY_TOTAL_USD,
+		MIN_POSITION_LEG_NOTIONAL_USD,
+		minTotalNotionalForLegFloors
+	} from '$lib/signal/pacifica/trade-sizing.js';
 	import { appendActivePairPosition, isSlugActive } from '$lib/signal/active-pair-positions.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
 	import type { PacificaCandle } from '$lib/signal/pacifica/types.js';
@@ -154,8 +159,12 @@
 			solanaWallet.pacificaAgentReady
 	);
 
-	const totalBelowMinimumForOpen = $derived(
-		totalAmountUsd != null && totalAmountUsd + 1e-9 < MIN_POSITION_ENTRY_TOTAL_USD
+	const effectiveMinTotalUsd = $derived(
+		minTotalNotionalForLegFloors(signal.allocationA, signal.allocationB)
+	);
+
+	const totalBelowEffectiveMinimum = $derived(
+		totalAmountUsd != null && totalAmountUsd + 1e-9 < effectiveMinTotalUsd
 	);
 
 	const openPositionDisabled = $derived.by(() => {
@@ -169,7 +178,7 @@
 		const ra = rowsBySymbol[symA];
 		const rb = rowsBySymbol[symB];
 		if (!ra || !rb) return true;
-		if (totalBelowMinimumForOpen) return true;
+		if (totalAmountUsd != null && totalAmountUsd + 1e-9 < effectiveMinTotalUsd) return true;
 		return false;
 	});
 
@@ -365,7 +374,9 @@
 		const ra = rowsBySymbol[symA];
 		const rb = rowsBySymbol[symB];
 		if (!ra || !rb) return;
-		totalAmountInputStr = String(MIN_POSITION_ENTRY_TOTAL_USD);
+		totalAmountInputStr = String(
+			minTotalNotionalForLegFloors(signal.allocationA, signal.allocationB)
+		);
 	});
 
 	$effect(() => {
@@ -419,7 +430,9 @@
 
 	function applyMinTotalAmount() {
 		totalAmountUserEdited = true;
-		totalAmountInputStr = String(MIN_POSITION_ENTRY_TOTAL_USD);
+		totalAmountInputStr = String(
+			minTotalNotionalForLegFloors(signal.allocationA, signal.allocationB)
+		);
 	}
 
 	/** Fetch the latest mark prices from Pacifica for both symbols immediately before sizing. */
@@ -782,15 +795,23 @@
 		{#if marketState === 'ok' && rowsBySymbol[symA] && rowsBySymbol[symB]}
 			<p id="order-constraints-hint" class="space-y-1 text-xs text-[#527E88]">
 				<span class="block text-[#144955]">
-					Minimum entry is {priceFormatter.format(MIN_POSITION_ENTRY_TOTAL_USD)} total amount.
+					Minimum entry is {priceFormatter.format(MIN_POSITION_ENTRY_TOTAL_USD)} total amount, with at
+					least {priceFormatter.format(MIN_POSITION_LEG_NOTIONAL_USD)} on each leg (long
+					{signal.tokenA}, short {signal.tokenB}).
 				</span>
-				{#if totalBelowMinimumForOpen}
+				{#if effectiveMinTotalUsd > MIN_POSITION_ENTRY_TOTAL_USD}
+					<span class="block text-[#527E88]">
+						For this allocation, total must be at least
+						{priceFormatter.format(effectiveMinTotalUsd)} so both legs meet the per-leg minimum.
+					</span>
+				{/if}
+				{#if totalBelowEffectiveMinimum}
 					<button
 						type="button"
 						class="mt-1 text-left font-semibold text-[#22C1EE] underline decoration-[#22C1EE]/50 underline-offset-2"
 						onclick={applyMinTotalAmount}
 					>
-						Set total amount to {priceFormatter.format(MIN_POSITION_ENTRY_TOTAL_USD)}
+						Set total amount to {priceFormatter.format(effectiveMinTotalUsd)}
 					</button>
 				{/if}
 			</p>
@@ -815,6 +836,7 @@
 		{/if}
 
 		<div class="flex flex-wrap items-center gap-2">
+			<!-- Dry-run still runs executePairTradeClient validation (product $100 / $10 per leg) before building signed bodies. -->
 			<label class="flex cursor-pointer items-center gap-2 text-xs text-[#527E88]">
 				<input
 					type="checkbox"

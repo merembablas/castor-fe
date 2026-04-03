@@ -11,7 +11,7 @@
 import { agentKeypairFromSecretBase58 } from './pacifica-agent-keypair.js';
 import { signPacificaMessageWithSecretKey } from './pacifica-message-sign.js';
 import type { MarketSizingRow } from './trade-sizing.js';
-import { planLegSize, splitPairNotionalUsd } from './trade-sizing.js';
+import { planLegSize, splitPairNotionalUsd, validateProductMinimumsForPairOpen } from './trade-sizing.js';
 
 const DEFAULT_SLIPPAGE = '3';
 
@@ -101,6 +101,7 @@ export interface ExecutePairTradeInput {
  * (no network calls to those routes).
  *
  * Leg sizes are floored to lot size but not blocked on exchange minimum order size (Pacifica may still reject).
+ * Product minimum total ($100) and per-leg notionals ($10) are enforced before any proxy calls, including dry-run.
  */
 export async function executePairTradeClient(
 	input: ExecutePairTradeInput,
@@ -120,6 +121,15 @@ export async function executePairTradeClient(
 	});
 	if ('error' in split) {
 		throw new Error(split.error);
+	}
+
+	const productMinError = validateProductMinimumsForPairOpen({
+		totalNotionalUsd: split.total,
+		allocationA: input.allocationA,
+		allocationB: input.allocationB
+	});
+	if (productMinError) {
+		throw new Error(productMinError);
 	}
 
 	const longPlan = planLegSize({

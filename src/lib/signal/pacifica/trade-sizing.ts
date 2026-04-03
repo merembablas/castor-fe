@@ -112,7 +112,49 @@ export function minTotalNotionalUsdFromMinMargin(minMarginUsd: number, leverage:
 }
 
 /** Product minimum total notional (USD) to open a position from signal detail. */
-export const MIN_POSITION_ENTRY_TOTAL_USD = 22;
+export const MIN_POSITION_ENTRY_TOTAL_USD = 100;
+
+/** Product minimum estimated notional (USD) on each leg (long token A, short token B). */
+export const MIN_POSITION_LEG_NOTIONAL_USD = 10;
+
+/**
+ * Minimum total notional so both legs are ≥ {@link MIN_POSITION_LEG_NOTIONAL_USD}
+ * and total ≥ {@link MIN_POSITION_ENTRY_TOTAL_USD}.
+ */
+export function minTotalNotionalForLegFloors(allocationA: number, allocationB: number): number {
+	const a = Math.trunc(allocationA);
+	const b = Math.trunc(allocationB);
+	if (!(a > 0) || !(b > 0)) {
+		return MIN_POSITION_ENTRY_TOTAL_USD;
+	}
+	const needFromA = (100 * MIN_POSITION_LEG_NOTIONAL_USD) / a;
+	const needFromB = (100 * MIN_POSITION_LEG_NOTIONAL_USD) / b;
+	return Math.max(MIN_POSITION_ENTRY_TOTAL_USD, needFromA, needFromB);
+}
+
+/** Returns an error message if product minimums fail; otherwise `null`. */
+export function validateProductMinimumsForPairOpen(input: {
+	totalNotionalUsd: number;
+	allocationA: number;
+	allocationB: number;
+}): string | null {
+	const { totalNotionalUsd, allocationA, allocationB } = input;
+	if (!(totalNotionalUsd > 0) || !Number.isFinite(totalNotionalUsd)) {
+		return 'Enter a valid total amount.';
+	}
+	if (totalNotionalUsd + 1e-9 < MIN_POSITION_ENTRY_TOTAL_USD) {
+		return `Minimum total amount is ${MIN_POSITION_ENTRY_TOTAL_USD} USD.`;
+	}
+	const longUsd = totalNotionalUsd * (allocationA / 100);
+	const shortUsd = totalNotionalUsd * (allocationB / 100);
+	if (
+		longUsd + 1e-9 < MIN_POSITION_LEG_NOTIONAL_USD ||
+		shortUsd + 1e-9 < MIN_POSITION_LEG_NOTIONAL_USD
+	) {
+		return `Each leg (long and short) needs at least ${MIN_POSITION_LEG_NOTIONAL_USD} USD notional. Increase total amount.`;
+	}
+	return null;
+}
 
 /** Format positive amount for Pacifica `amount` string (no scientific notation). */
 export function formatAmountString(value: number, maxDecimals: number): string {

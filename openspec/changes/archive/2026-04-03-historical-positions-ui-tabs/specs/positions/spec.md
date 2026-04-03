@@ -1,28 +1,4 @@
-## Requirements
-
-### Requirement: Positions page lists open pair positions backed by storage and Pacifica
-
-The system SHALL render `/positions` with an **Active** view that lists **open pair positions** derived from **active pair positions** in browser storage (`castor:activePairPositions`). A slug SHALL appear as a row in the Active view **only if** Pacifica **Get positions** reports **open positions for both** underlying symbols of that pair (resolved from the same slug metadata used elsewhere for pair trading). The page SHALL also provide a **Historical** view on the same route that lists closed records from the historical web-cache store per the **Positions page provides Active and Historical tabs** requirement. The page SHALL remain reachable from the **Positions** navigation entry. If active pair storage is empty or no slug satisfies the API check, the **Active** view SHALL show an **empty** state (no fabricated rows). If the user cannot authenticate to Pacifica (e.g. wallet or agent key not available per existing app rules), the system SHALL show an explicit **unauthenticated** or **unavailable** state rather than dummy data for flows that require Pacifica.
-
-#### Scenario: User opens Positions from navigation
-
-- **WHEN** the user activates the **Positions** link in the main navigation
-- **THEN** the browser navigates to `/positions` and the Active list, Historical list (via tabs), or an explicit empty or unavailable state is shown per the rules above
-
-#### Scenario: No rows when storage is empty
-
-- **WHEN** active pair storage contains no slugs
-- **THEN** the Active view shows no position rows and does not show dummy placeholders
-
-#### Scenario: Row appears only when both legs exist on Pacifica
-
-- **WHEN** a slug is present in active pair storage and Pacifica positions include open positions for both symbols of that pair
-- **THEN** exactly one row is shown for that slug in the Active view with data sourced from the API and metadata
-
-#### Scenario: Orphan API positions are hidden
-
-- **WHEN** Pacifica reports an open position for a symbol that is not part of any slug currently in active pair storage
-- **THEN** the Active view does not show a row for that orphan symbol
+## ADDED Requirements
 
 ### Requirement: Positions page provides Active and Historical tabs on the same route
 
@@ -75,14 +51,31 @@ On historical rows, the system SHALL use the **right-hand** column area (the sam
 - **WHEN** a historical record has **`fundingPaidUsd`** less than zero
 - **THEN** the funding paid amount uses red foreground treatment and a non-color-only cue
 
-### Requirement: Positions page reconciles active pair storage with Pacifica positions
+## MODIFIED Requirements
 
-When Pacifica **Get positions** does not report an open position for **either** leg symbol of a stored slug (per product interpretation implemented consistently in code), the system SHALL **remove** that slug from active pair storage so future visits and other views (e.g. signal detail) stay consistent. The UI SHALL remove the corresponding row after reconciliation.
+### Requirement: Positions page lists open pair positions backed by storage and Pacifica
 
-#### Scenario: Stale slug is pruned when legs are closed
+The system SHALL render `/positions` with an **Active** view that lists **open pair positions** derived from **active pair positions** in browser storage (`castor:activePairPositions`). A slug SHALL appear as a row in the Active view **only if** Pacifica **Get positions** reports **open positions for both** underlying symbols of that pair (resolved from the same slug metadata used elsewhere for pair trading). The page SHALL also provide a **Historical** view on the same route that lists closed records from the historical web-cache store per the **Positions page provides Active and Historical tabs** requirement. The page SHALL remain reachable from the **Positions** navigation entry. If active pair storage is empty or no slug satisfies the API check, the **Active** view SHALL show an **empty** state (no fabricated rows). If the user cannot authenticate to Pacifica (e.g. wallet or agent key not available per existing app rules), the system SHALL show an explicit **unauthenticated** or **unavailable** state rather than dummy data for flows that require Pacifica.
 
-- **WHEN** a slug remains in storage but Pacifica shows no open position for at least one required leg of that pair
-- **THEN** the slug is removed from storage and the row is not displayed
+#### Scenario: User opens Positions from navigation
+
+- **WHEN** the user activates the **Positions** link in the main navigation
+- **THEN** the browser navigates to `/positions` and the Active list, Historical list (via tabs), or an explicit empty or unavailable state is shown per the rules above
+
+#### Scenario: No rows when storage is empty
+
+- **WHEN** active pair storage contains no slugs
+- **THEN** the Active view shows no position rows and does not show dummy placeholders
+
+#### Scenario: Row appears only when both legs exist on Pacifica
+
+- **WHEN** a slug is present in active pair storage and Pacifica positions include open positions for both symbols of that pair
+- **THEN** exactly one row is shown for that slug in the Active view with data sourced from the API and metadata
+
+#### Scenario: Orphan API positions are hidden
+
+- **WHEN** Pacifica reports an open position for a symbol that is not part of any slug currently in active pair storage
+- **THEN** the Active view does not show a row for that orphan symbol
 
 ### Requirement: Unrealized P&L updates from Pacifica mark price candles
 
@@ -117,29 +110,6 @@ For each **Active** position row the system SHALL display:
 
 - **WHEN** Pacifica Get positions returns a `funding` string for each leg of the displayed pair
 - **THEN** the row’s net funding paid reflects the **numeric sum** of those two leg values (after parsing decimal strings), shown on the single net funding line
-
-### Requirement: Unrealized P&L uses green for profit and red for loss
-
-The system SHALL style unrealized profit (positive P&L) with a **green** foreground treatment and unrealized loss (negative P&L) with a **red** foreground treatment. P&L text SHALL not rely on color alone (e.g. signed values or explicit profit/loss indicators SHALL accompany color).
-
-#### Scenario: Profitable position shows green styling
-
-- **WHEN** a position has positive unrealized P&L
-- **THEN** its P&L percent and dollar display use green styling and a non-color-only cue (such as a leading plus sign or explicit positive formatting)
-
-#### Scenario: Losing position shows red styling
-
-- **WHEN** a position has negative unrealized P&L
-- **THEN** its P&L percent and dollar display use red styling and a non-color-only cue (such as a leading minus sign or explicit negative formatting)
-
-### Requirement: Long and short legs are visually distinct on position rows
-
-The system SHALL present token A as the **long** leg and token B as the **short** leg. Each position row SHALL differentiate the two legs using distinct visual treatment including **iconography or badges** and **color**, consistent with the home live-signals list pattern and the oceanic design palette.
-
-#### Scenario: Long and short are distinguishable on positions
-
-- **WHEN** the user views a position row
-- **THEN** the long leg (token A) and short leg (token B) use non-identical styling that includes semantic labeling and differing accent colors or icons
 
 ### Requirement: Close position control appears on the right side of each row
 
@@ -176,24 +146,3 @@ The `/positions` page—the **tab** control (if interactive), **position list** 
 
 - **WHEN** the user sees the **Close position** button on an Active row
 - **THEN** it uses pill radius and secondary ghost / `#B9E9F6` or `#22C1EE` border treatment per the design system, not sharp corners
-
-### Requirement: Close position fully closes the pair and clears slug from active pair storage
-
-When the user activates **Close position** on a row, the system SHALL submit exchange actions that **fully close** the **long** leg on token A’s Pacifica symbol and the **short** leg on token B’s Pacifica symbol, using **full** current position sizes from Pacifica **Get positions** for those symbols. The system SHALL **not** offer or perform **partial** closes for this control. The system SHALL use the same **API agent** signing and proxy patterns as the existing pair **open** flow unless documentation requires otherwise.
-
-While a close is in progress for a row, the system SHALL prevent duplicate submission for that row (e.g. disabled control and/or visible busy state). On **failure** of either closing action, the system SHALL show a **visible** error and SHALL **not** remove the slug from **`castor:activePairPositions`**. On **success** of **both** closing actions, the system SHALL **remove** that row’s **slug** from **`castor:activePairPositions`** and SHALL **invalidate or remove client-side slug-scoped caches** used to treat that pair as open (at minimum the active-pair entry; extend to any other slug-keyed client store discovered during implementation). The positions list SHALL update to reflect the closed pair (row removed after storage removal and refresh).
-
-#### Scenario: Successful close removes slug and row
-
-- **WHEN** the user activates **Close position** and both leg-closing exchange actions succeed
-- **THEN** the slug is removed from `castor:activePairPositions`, slug-scoped client caches for that pair are cleared as specified, and the row no longer appears after the list refreshes
-
-#### Scenario: Failed close keeps slug and row
-
-- **WHEN** either leg-closing exchange action fails
-- **THEN** the user sees an error, the slug remains in `castor:activePairPositions`, and the row remains (subject to normal reconciliation if the exchange state already changed)
-
-#### Scenario: No partial close
-
-- **WHEN** the user activates **Close position**
-- **THEN** the system closes each leg using the full open size from Pacifica for that symbol and does not prompt for a fraction of the position

@@ -3,9 +3,12 @@ import type { MergedPairPositionRow } from './active-pairs-positions-merge.js';
 import {
 	appendHistoricalClosedPairPosition,
 	buildHistoricalClosedPairPositionInput,
+	displayTokenLabelsForHistoricalPair,
+	fundingPaidForegroundClass,
 	HISTORICAL_PAIR_POSITIONS_MAX,
 	parseHistoricalPairPositionsJson,
-	readHistoricalClosedPairPositions
+	readHistoricalClosedPairPositions,
+	sortHistoricalClosedPairPositionsNewestFirst
 } from './historical-pair-positions.js';
 
 function memoryLocalStorage(): Storage {
@@ -174,5 +177,79 @@ describe('buildHistoricalClosedPairPositionInput', () => {
 		expect(input!.closedAt).toBe(999);
 		expect(input!.longSymbol).toBe('SYM_A');
 		expect(input!.shortSymbol).toBe('SYM_B');
+	});
+});
+
+describe('sortHistoricalClosedPairPositionsNewestFirst', () => {
+	it('orders by closedAt descending', () => {
+		const sorted = sortHistoricalClosedPairPositionsNewestFirst([
+			{
+				id: 'a',
+				slug: 'X:50-Y:50',
+				longSymbol: 'L',
+				shortSymbol: 'S',
+				longAllocationPercent: 50,
+				shortAllocationPercent: 50,
+				openedAt: 1,
+				closedAt: 100,
+				realizedPnlUsd: 0,
+				fundingPaidUsd: 0
+			},
+			{
+				id: 'b',
+				slug: 'X:50-Y:50',
+				longSymbol: 'L',
+				shortSymbol: 'S',
+				longAllocationPercent: 50,
+				shortAllocationPercent: 50,
+				openedAt: 1,
+				closedAt: 300,
+				realizedPnlUsd: 0,
+				fundingPaidUsd: 0
+			},
+			{
+				id: 'c',
+				slug: 'X:50-Y:50',
+				longSymbol: 'L',
+				shortSymbol: 'S',
+				longAllocationPercent: 50,
+				shortAllocationPercent: 50,
+				openedAt: 1,
+				closedAt: 200,
+				realizedPnlUsd: 0,
+				fundingPaidUsd: 0
+			}
+		]);
+		expect(sorted.map((r) => r.id)).toEqual(['b', 'c', 'a']);
+	});
+});
+
+describe('displayTokenLabelsForHistoricalPair', () => {
+	it('uses slug tokens when slug parses', () => {
+		expect(
+			displayTokenLabelsForHistoricalPair({
+				slug: 'SOL:60-ETH:40',
+				longSymbol: 'IGNORE',
+				shortSymbol: 'IGNORE'
+			})
+		).toEqual({ tokenALabel: 'SOL', tokenBLabel: 'ETH' });
+	});
+
+	it('falls back to symbols when slug does not parse', () => {
+		expect(
+			displayTokenLabelsForHistoricalPair({
+				slug: 'not-a-slug',
+				longSymbol: 'AAA',
+				shortSymbol: 'BBB'
+			})
+		).toEqual({ tokenALabel: 'AAA', tokenBLabel: 'BBB' });
+	});
+});
+
+describe('fundingPaidForegroundClass', () => {
+	it('maps sign to tone classes', () => {
+		expect(fundingPaidForegroundClass(1)).toBe('text-emerald-600');
+		expect(fundingPaidForegroundClass(-0.01)).toBe('text-red-600');
+		expect(fundingPaidForegroundClass(0)).toBe('text-[#527E88]');
 	});
 });

@@ -1,3 +1,4 @@
+import { parseSignalSlug } from '$lib/signal/parse-signal-slug.js';
 import type { MergedPairPositionRow } from './active-pairs-positions-merge.js';
 import { pairUnrealizedPnlUsd } from './positions-pnl.js';
 
@@ -81,6 +82,33 @@ export function readHistoricalClosedPairPositions(): HistoricalClosedPairPositio
 	return parseHistoricalPairPositionsJson(
 		localStorage.getItem(HISTORICAL_PAIR_POSITIONS_STORAGE_KEY)
 	);
+}
+
+/** Newest closed first (for positions history UI). */
+export function sortHistoricalClosedPairPositionsNewestFirst(
+	records: HistoricalClosedPairPosition[]
+): HistoricalClosedPairPosition[] {
+	return [...records].sort((a, b) => b.closedAt - a.closedAt);
+}
+
+export function displayTokenLabelsForHistoricalPair(
+	record: Pick<HistoricalClosedPairPosition, 'slug' | 'longSymbol' | 'shortSymbol'>
+): { tokenALabel: string; tokenBLabel: string } {
+	const parsed = parseSignalSlug(record.slug);
+	if (parsed.ok) {
+		return { tokenALabel: parsed.value.tokenA, tokenBLabel: parsed.value.tokenB };
+	}
+	return {
+		tokenALabel: record.longSymbol.trim(),
+		tokenBLabel: record.shortSymbol.trim()
+	};
+}
+
+/** Tailwind text color classes for signed funding (non-color-only cues via formatted value in UI). */
+export function fundingPaidForegroundClass(usd: number): string {
+	if (usd > 0) return 'text-emerald-600';
+	if (usd < 0) return 'text-red-600';
+	return 'text-[#527E88]';
 }
 
 function serializeDocument(records: HistoricalClosedPairPosition[]): string {

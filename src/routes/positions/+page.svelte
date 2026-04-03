@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import HistoricalPositionListItem from '$lib/components/historical-position-list-item.svelte';
 	import PositionListItem from '$lib/components/position-list-item.svelte';
 	import { buildOpenPositionFromMergedRow } from '$lib/positions/build-open-position-row.js';
 	import type { MergedPairPositionRow } from '$lib/positions/active-pairs-positions-merge.js';
@@ -7,7 +8,12 @@
 		mergeActivePairsWithPacificaPositions,
 		resolveActiveSlug
 	} from '$lib/positions/active-pairs-positions-merge.js';
-	import { tryAppendHistoricalClosedPairFromMergedRow } from '$lib/positions/historical-pair-positions.js';
+	import {
+		readHistoricalClosedPairPositions,
+		sortHistoricalClosedPairPositionsNewestFirst,
+		tryAppendHistoricalClosedPairFromMergedRow,
+		type HistoricalClosedPairPosition
+	} from '$lib/positions/historical-pair-positions.js';
 	import { positionsRowsToSymbolMap } from '$lib/positions/pacifica-position-normalize.js';
 	import {
 		readActivePairPositions,
@@ -22,11 +28,13 @@
 	import { loadPacificaAgent } from '$lib/signal/pacifica/pacifica-agent-storage.js';
 	import type { PacificaPositionRow } from '$lib/signal/pacifica/rest-types.js';
 	import { solanaWallet } from '$lib/solana/wallet.svelte.js';
+	import { cn } from '$lib/utils.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	type PageLoadState = 'idle' | 'loading' | 'ok' | 'error';
+	type PositionsTab = 'active' | 'historical';
 
 	let loadState = $state<PageLoadState>('idle');
 	let loadError = $state<string | null>(null);
@@ -34,6 +42,15 @@
 	let marksBySymbol = $state<Record<string, number>>({});
 	let closingSlug = $state<string | null>(null);
 	let closeError = $state<string | null>(null);
+	let positionsTab = $state<PositionsTab>('active');
+	let historicalRows = $state<HistoricalClosedPairPosition[]>([]);
+
+	function syncHistoricalFromStorage(): void {
+		if (!browser) return;
+		historicalRows = sortHistoricalClosedPairPositionsNewestFirst(
+			readHistoricalClosedPairPositions()
+		);
+	}
 
 	const openPositions = $derived(
 		mergedRows.map((row) => buildOpenPositionFromMergedRow(row, marksBySymbol))
@@ -107,6 +124,7 @@
 
 		mergedRows = rows;
 		loadState = 'ok';
+		syncHistoricalFromStorage();
 	}
 
 	async function handleClosePair(row: MergedPairPositionRow): Promise<void> {
@@ -165,8 +183,11 @@
 			loadError = null;
 			mergedRows = [];
 			marksBySymbol = {};
+			historicalRows = [];
 			return;
 		}
+
+		syncHistoricalFromStorage();
 
 		let cancelled = false;
 
@@ -192,6 +213,9 @@
 
 	$effect(() => {
 		if (!browser) return;
+		if (positionsTab !== 'active') {
+			return;
+		}
 		if (symbolsForMarks.length === 0) {
 			marksBySymbol = {};
 			return;
@@ -209,6 +233,15 @@
 		});
 
 		return () => ctrl.disconnect();
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		if (positionsTab !== 'historical') return;
+		const connected = solanaWallet.connected;
+		const pk = solanaWallet.publicKey;
+		if (!connected || !pk) return;
+		syncHistoricalFromStorage();
 	});
 </script>
 
@@ -230,44 +263,128 @@
 		>
 			Connect your Solana wallet to see open pair positions from Pacifica.
 		</p>
-	{:else if loadState === 'loading' && mergedRows.length === 0}
-		<p
-			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
-		>
-			Loading positions…
-		</p>
-	{:else if loadState === 'error'}
-		<p
-			class="rounded-[24px] border border-red-200 bg-white/50 p-4 text-sm text-red-700 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
-			role="alert"
-		>
-			{loadError ?? 'Could not load positions.'}
-		</p>
-	{:else if openPositions.length === 0}
-		<p
-			class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
-		>
-			No open pair positions. Open a trade from a signal to track it here.
-		</p>
 	{:else}
-		{#if closeError}
-			<p
-				class="rounded-[24px] border border-red-200 bg-white/50 p-4 text-sm text-red-700 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
-				role="alert"
+		<div class="space-y-4">
+			<div
+				role="tablist"
+				aria-label="Position views"
+				class="flex rounded-full border border-[#22C1EE]/30 bg-white/40 p-1 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
 			>
-				{closeError}
-			</p>
-		{/if}
-		<ul class="space-y-3" aria-label="Open positions">
-			{#each openPositions as position (position.id)}
-				{@const merged = mergedRows.find((r) => r.slug === position.id)}
-				<PositionListItem
-					{position}
-					closing={closingSlug === position.id}
-					closeDisabled={!solanaWallet.pacificaAgentReady}
-					onClose={merged ? () => handleClosePair(merged) : undefined}
-				/>
-			{/each}
-		</ul>
+				<button
+					type="button"
+					role="tab"
+					id="positions-tab-active"
+					aria-selected={positionsTab === 'active'}
+					aria-controls="positions-panel-active"
+					tabindex={positionsTab === 'active' ? 0 : -1}
+					class={cn(
+						'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-transform duration-150',
+						'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE]',
+						'hover:scale-[1.02] hover:brightness-[1.02]',
+						positionsTab === 'active'
+							? 'bg-[#22C1EE]/20 text-[#144955] ring-1 ring-[#22C1EE]/35'
+							: 'text-[#527E88]'
+					)}
+					onclick={() => {
+						positionsTab = 'active';
+					}}
+				>
+					Active
+				</button>
+				<button
+					type="button"
+					role="tab"
+					id="positions-tab-historical"
+					aria-selected={positionsTab === 'historical'}
+					aria-controls="positions-panel-historical"
+					tabindex={positionsTab === 'historical' ? 0 : -1}
+					class={cn(
+						'flex-1 rounded-full px-4 py-2.5 text-sm font-semibold transition-transform duration-150',
+						'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE]',
+						'hover:scale-[1.02] hover:brightness-[1.02]',
+						positionsTab === 'historical'
+							? 'bg-[#22C1EE]/20 text-[#144955] ring-1 ring-[#22C1EE]/35'
+							: 'text-[#527E88]'
+					)}
+					onclick={() => {
+						positionsTab = 'historical';
+					}}
+				>
+					Historical
+				</button>
+			</div>
+
+			{#if positionsTab === 'historical'}
+				<div
+					id="positions-panel-historical"
+					role="tabpanel"
+					aria-labelledby="positions-tab-historical"
+					class="min-w-0"
+				>
+					{#if historicalRows.length === 0}
+						<p
+							class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+						>
+							No closed pair positions yet. History appears here after you close a tracked pair or it is
+							reconciled off active storage.
+						</p>
+					{:else}
+						<ul class="space-y-3" aria-label="Historical positions">
+							{#each historicalRows as record (record.id)}
+								<HistoricalPositionListItem {record} />
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{:else}
+				<div
+					id="positions-panel-active"
+					role="tabpanel"
+					aria-labelledby="positions-tab-active"
+					class="min-w-0 space-y-3"
+				>
+					{#if loadState === 'loading' && mergedRows.length === 0}
+						<p
+							class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+						>
+							Loading positions…
+						</p>
+					{:else if loadState === 'error'}
+						<p
+							class="rounded-[24px] border border-red-200 bg-white/50 p-4 text-sm text-red-700 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+							role="alert"
+						>
+							{loadError ?? 'Could not load positions.'}
+						</p>
+					{:else if openPositions.length === 0}
+						<p
+							class="rounded-[24px] border border-[#22C1EE]/20 bg-white/50 p-4 text-sm text-[#527E88] shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+						>
+							No open pair positions. Open a trade from a signal to track it here.
+						</p>
+					{:else}
+						{#if closeError}
+							<p
+								class="rounded-[24px] border border-red-200 bg-white/50 p-4 text-sm text-red-700 shadow-[0_10px_30px_-10px_rgba(34,193,238,0.2)]"
+								role="alert"
+							>
+								{closeError}
+							</p>
+						{/if}
+						<ul class="space-y-3" aria-label="Open positions">
+							{#each openPositions as position (position.id)}
+								{@const merged = mergedRows.find((r) => r.slug === position.id)}
+								<PositionListItem
+									{position}
+									closing={closingSlug === position.id}
+									closeDisabled={!solanaWallet.pacificaAgentReady}
+									onClose={merged ? () => handleClosePair(merged) : undefined}
+								/>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	{/if}
 </div>

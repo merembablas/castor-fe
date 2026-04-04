@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { activePairSlugs } from '$lib/live-signals/active-pair-slugs.svelte.js';
+	import { formatSignalMetricValue } from '$lib/live-signals/signal-metric-format.js';
 	import type { LiveSignal } from '$lib/live-signals/live-signals.js';
 	import type { NewsSummaryItem } from '$lib/symbol-news/news-api.types.js';
 	import { teaserOneSentence } from '$lib/symbol-news/normalize-news.js';
@@ -33,6 +34,15 @@
 	const slugKey = $derived(signal.slug.trim());
 	const hasOpenPositionInCache = $derived(
 		activePairSlugs.hydrated && activePairSlugs.activeSlugs.has(slugKey)
+	);
+	const hasMetricHighlights = $derived(
+		typeof signal.zScore === 'number' && typeof signal.snr === 'number'
+	);
+	const zScoreFormatted = $derived(
+		typeof signal.zScore === 'number' ? formatSignalMetricValue(signal.zScore) : ''
+	);
+	const snrFormatted = $derived(
+		typeof signal.snr === 'number' ? formatSignalMetricValue(signal.snr) : ''
 	);
 
 	const longTeaser = $derived(longItems[0]?.summary ? teaserOneSentence(longItems[0].summary) : '');
@@ -159,7 +169,47 @@
 			{/if}
 		</div>
 		<p class="mt-2 text-xs text-[#527E88]">Generated {formatWhen(signal.generatedAt)}</p>
-		<p class="mt-1 line-clamp-3 text-sm text-[#144955]">{signal.description}</p>
+		{#if hasMetricHighlights}
+			<div
+				class="mt-2 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-3"
+				aria-label="Signal metrics"
+			>
+				<div
+					class="min-w-0 flex-1 rounded-xl bg-linear-to-br from-[#22C1EE]/18 to-[#22C1EE]/5 px-3 py-2.5 ring-2 ring-[#22C1EE]/35"
+				>
+					<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+						<span class="text-[11px] font-extrabold tracking-[0.12em] text-[#0D8FB5] uppercase"
+							>Z-score</span
+						>
+						<span
+							class="text-2xl font-black tabular-nums tracking-tight text-[#144955] sm:text-[1.65rem]"
+							>{zScoreFormatted}</span
+						>
+					</div>
+					<p class="mt-1 text-xs leading-snug text-[#527E88]">
+						How far the spread is from its typical range.
+					</p>
+				</div>
+				<div
+					class="min-w-0 flex-1 rounded-xl bg-linear-to-br from-[#144955]/14 to-[#144955]/5 px-3 py-2.5 ring-2 ring-[#144955]/25"
+				>
+					<div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+						<span class="text-[11px] font-extrabold tracking-[0.12em] text-[#144955] uppercase"
+							>SNR</span
+						>
+						<span
+							class="text-2xl font-black tabular-nums tracking-tight text-[#0A2F35] sm:text-[1.65rem]"
+							>{snrFormatted}</span
+						>
+					</div>
+					<p class="mt-1 text-xs leading-snug text-[#527E88]">
+						Signal strength relative to noise.
+					</p>
+				</div>
+			</div>
+		{:else}
+			<p class="mt-1 line-clamp-3 text-sm text-[#144955]">{signal.description}</p>
+		{/if}
 
 		{#if longTeaser || shortTeaser}
 			<div class="mt-3 space-y-1.5 border-t border-[#22C1EE]/15 pt-3">

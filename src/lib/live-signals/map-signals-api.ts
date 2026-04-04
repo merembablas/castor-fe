@@ -1,11 +1,7 @@
 import { parseSignalSlug } from '$lib/signal/parse-signal-slug.js';
 import type { LiveSignal } from './live-signals.js';
 import type { SignalsApiRow } from './signals-api.types.js';
-
-const metricFormatter = new Intl.NumberFormat(undefined, {
-	minimumFractionDigits: 0,
-	maximumFractionDigits: 2
-});
+import { formatSignalMetricValue } from './signal-metric-format.js';
 
 function allocationForSymbol(row: SignalsApiRow, symbol: string): number | null {
 	if (row.symbol_a === symbol) return row.alloc_a_pct;
@@ -15,8 +11,8 @@ function allocationForSymbol(row: SignalsApiRow, symbol: string): number | null 
 
 /** Single-line copy for the list: Z-score and SNR with ≤2 decimal places and short explanations. */
 export function buildSignalMetricsDescription(zScore: number, snr: number): string {
-	const z = metricFormatter.format(zScore);
-	const s = metricFormatter.format(snr);
+	const z = formatSignalMetricValue(zScore);
+	const s = formatSignalMetricValue(snr);
 	return (
 		`Z-score ${z} — how far the spread is from its typical range. ` +
 		`SNR ${s} — signal strength relative to noise.`
@@ -45,7 +41,9 @@ export function mapSignalsApiRowToLiveSignal(row: SignalsApiRow): LiveSignal | n
 		allocationA,
 		allocationB,
 		generatedAt: row.datetime_signal_occurred,
-		description: buildSignalMetricsDescription(row.z_score, row.snr)
+		description: buildSignalMetricsDescription(row.z_score, row.snr),
+		zScore: row.z_score,
+		snr: row.snr
 	};
 }
 

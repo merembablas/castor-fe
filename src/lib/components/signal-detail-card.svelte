@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import SignalWeightedChartSection from '$lib/components/signal-weighted-chart-section.svelte';
 	import { effectiveMaxLeverage } from '$lib/signal/pacifica/leverage-options.js';
@@ -818,10 +819,28 @@
 		{/if}
 
 		{#if slugActive}
-			<p class="text-sm text-[#144955]" role="status">
-				You already have an active position for this pair in this browser. Clear site data or use
-				another signal to open again.
-			</p>
+			<div
+				class="relative overflow-hidden rounded-xl border-2 border-[#22C1EE]/45 bg-linear-to-br from-[#22C1EE]/18 via-[#144955]/8 to-[#22C1EE]/10 px-4 py-3.5 shadow-sm ring-1 ring-[#22C1EE]/20"
+				role="status"
+				aria-live="polite"
+			>
+				<div
+					class="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full bg-[#22C1EE]/15 blur-2xl"
+					aria-hidden="true"
+				></div>
+				<p class="relative text-lg font-extrabold leading-snug tracking-tight text-[#063845] sm:text-xl">
+					You already have an active position for this pair in this browser.
+				</p>
+				<p class="relative mt-3">
+					<a
+						href={resolve('/positions')}
+						aria-label="Open the Positions page to view your active pair position"
+						class="inline-flex items-center gap-1 text-base font-extrabold text-[#0891b2] underline decoration-2 decoration-[#22C1EE]/70 underline-offset-[0.2em] transition-colors hover:text-[#0e7490] hover:decoration-[#22C1EE] focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[#22C1EE] focus-visible:ring-offset-2"
+					>
+						View your position
+					</a>
+				</p>
+			</div>
 		{/if}
 
 		{#if solanaWallet.connected && solanaWallet.pacificaAgentBinding}

@@ -1,3 +1,4 @@
+import { dedupeSignalsBySlugNewest } from '$lib/signal/dedupe-signals-by-slug-newest.js';
 import { parseSignalSlug } from '$lib/signal/parse-signal-slug.js';
 import type { ArchivedSignal } from './archived-signal.js';
 import type { ArchivesApiRow } from './archives-api.types.js';
@@ -56,5 +57,5 @@ export function mapArchivesApiRows(rows: ArchivesApiRow[]): ArchivedSignal[] {
 		const mapped = mapArchivesApiRowToArchivedSignal(row);
 		if (mapped) out.push(mapped);
 	}
-	return out;
+	return dedupeSignalsBySlugNewest(out, (s) => s.archivedAt);
 }

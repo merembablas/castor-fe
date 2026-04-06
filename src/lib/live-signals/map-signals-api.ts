@@ -1,3 +1,4 @@
+import { dedupeSignalsBySlugNewest } from '$lib/signal/dedupe-signals-by-slug-newest.js';
 import { parseSignalSlug } from '$lib/signal/parse-signal-slug.js';
 import type { LiveSignal } from './live-signals.js';
 import type { SignalsApiRow } from './signals-api.types.js';
@@ -53,5 +54,5 @@ export function mapSignalsApiRows(rows: SignalsApiRow[]): LiveSignal[] {
 		const mapped = mapSignalsApiRowToLiveSignal(row);
 		if (mapped) out.push(mapped);
 	}
-	return out;
+	return dedupeSignalsBySlugNewest(out, (s) => s.generatedAt);
 }

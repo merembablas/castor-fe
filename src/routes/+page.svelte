@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
-	import { navigating } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { activePairSlugs } from '$lib/live-signals/active-pair-slugs.svelte.js';
 	import LiveSignalRow from '$lib/live-signals/live-signal-row.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
-	const listNavigating = $derived(navigating !== null && navigating.to?.url.pathname === '/');
+	const listNavigating = $derived(
+		navigating.to != null &&
+			navigating.to.url.pathname === '/' &&
+			page.url.pathname !== '/'
+	);
 
 	afterNavigate(({ to }) => {
 		if (to?.url.pathname === '/') activePairSlugs.refresh();

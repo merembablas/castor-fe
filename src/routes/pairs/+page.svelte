@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { navigating } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import type { PageData } from './$types';
 	import { allocationFromCointCoefficient } from '$lib/pairs/allocation.js';
 	import { pairLastUpdatedIso } from '$lib/pairs/last-updated.js';
@@ -25,7 +25,11 @@
 		return numberFmt.format(p);
 	}
 
-	const listNavigating = $derived(navigating !== null && navigating.to?.url.pathname === '/pairs');
+	const listNavigating = $derived(
+		navigating.to != null &&
+			navigating.to.url.pathname === '/pairs' &&
+			page.url.pathname !== '/pairs'
+	);
 </script>
 
 <svelte:head>

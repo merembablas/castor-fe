@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { navigating } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import type { PageData } from './$types';
 	import { cn } from '$lib/utils.js';
 
@@ -16,7 +16,9 @@
 	}
 
 	const listNavigating = $derived(
-		navigating !== null && navigating.to?.url.pathname === '/archives'
+		navigating.to != null &&
+			navigating.to.url.pathname === '/archives' &&
+			page.url.pathname !== '/archives'
 	);
 </script>
 

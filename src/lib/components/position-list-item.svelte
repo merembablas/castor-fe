@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { OpenPosition } from '$lib/positions/open-position.js';
+	import { fundingPaidForegroundClass } from '$lib/positions/historical-pair-positions.js';
 	import { cn } from '$lib/utils.js';
 
 	let {
@@ -61,6 +62,7 @@
 	const pnlPercentStr = $derived(formatPercent(position.unrealizedPnlPercent));
 	const pnlUsdStr = $derived(formatSignedUsd(position.unrealizedPnlUsd));
 	const netFundingUsdStr = $derived(formatSignedUsd(position.netFundingPaidUsd));
+	const netFundingClass = $derived(fundingPaidForegroundClass(position.netFundingPaidUsd));
 
 	const closeLabel = $derived(
 		closing
@@ -166,7 +168,7 @@
 				<p class="text-xs tabular-nums text-[#527E88]">
 					<span class="font-medium text-[#144955]">Net funding paid</span>
 					<span class="mx-1.5">·</span>
-					<span>{netFundingUsdStr}</span>
+					<span class={cn('font-semibold', netFundingClass)}>{netFundingUsdStr}</span>
 				</p>
 			</div>
 		</div>

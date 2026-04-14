@@ -6,6 +6,12 @@
 
 	let { data }: { data: PageData } = $props();
 
+	function archivesPageHref(page: number): string {
+		const base = resolve('/archives');
+		if (page <= 1) return base;
+		return `${base}?page=${page}`;
+	}
+
 	const formatter = new Intl.DateTimeFormat(undefined, {
 		dateStyle: 'medium',
 		timeStyle: 'short'
@@ -132,5 +138,53 @@
 				</li>
 			{/each}
 		</ul>
+		{#if data.archivesShowPagination}
+			<nav
+				class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+				aria-label="Archives pagination"
+			>
+				<p class="text-center text-sm text-[#527E88] sm:text-left">
+					Page {data.archivesPageIndex} of {data.archivesTotalPages}
+				</p>
+				<div class="flex items-center justify-center gap-2 sm:justify-end">
+					{#if data.archivesPageIndex <= 1}
+						<span
+							class="inline-flex min-h-11 min-w-22 cursor-not-allowed items-center justify-center rounded-full border border-[#22C1EE]/20 bg-white/30 px-4 text-sm font-medium text-[#527E88]/60"
+							aria-disabled="true"
+						>Previous</span>
+					{:else}
+						<a
+							href={archivesPageHref(data.archivesPageIndex - 1)}
+							class={cn(
+								'inline-flex min-h-11 min-w-22 items-center justify-center rounded-full border border-[#22C1EE]/25',
+								'bg-white/50 px-4 text-sm font-medium text-[#144955] shadow-[0_6px_20px_-8px_rgba(34,193,238,0.2)]',
+								'transition-transform duration-150 hover:scale-[1.02] hover:brightness-[1.02]',
+								'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE]'
+							)}
+						>
+							Previous
+						</a>
+					{/if}
+					{#if data.archivesPageIndex >= data.archivesTotalPages}
+						<span
+							class="inline-flex min-h-11 min-w-22 cursor-not-allowed items-center justify-center rounded-full border border-[#22C1EE]/20 bg-white/30 px-4 text-sm font-medium text-[#527E88]/60"
+							aria-disabled="true"
+						>Next</span>
+					{:else}
+						<a
+							href={archivesPageHref(data.archivesPageIndex + 1)}
+							class={cn(
+								'inline-flex min-h-11 min-w-22 items-center justify-center rounded-full border border-[#22C1EE]/25',
+								'bg-white/50 px-4 text-sm font-medium text-[#144955] shadow-[0_6px_20px_-8px_rgba(34,193,238,0.2)]',
+								'transition-transform duration-150 hover:scale-[1.02] hover:brightness-[1.02]',
+								'focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#22C1EE]'
+							)}
+						>
+							Next
+						</a>
+					{/if}
+				</div>
+			</nav>
+		{/if}
 	{/if}
 </div>

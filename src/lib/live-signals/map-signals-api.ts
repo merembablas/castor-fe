@@ -4,6 +4,20 @@ import type { LiveSignal } from './live-signals.js';
 import type { SignalsApiRow } from './signals-api.types.js';
 import { formatSignalMetricValue } from './signal-metric-format.js';
 
+function generatedAtSortKey(iso: string): number {
+	const t = Date.parse(iso);
+	return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+}
+
+function compareLiveSignalsListOrder(a: LiveSignal, b: LiveSignal): number {
+	const tb = generatedAtSortKey(b.generatedAt);
+	const ta = generatedAtSortKey(a.generatedAt);
+	if (tb !== ta) return tb - ta;
+	const byA = a.tokenALabel.localeCompare(b.tokenALabel, 'en', { sensitivity: 'base' });
+	if (byA !== 0) return byA;
+	return a.tokenBLabel.localeCompare(b.tokenBLabel, 'en', { sensitivity: 'base' });
+}
+
 function allocationForSymbol(row: SignalsApiRow, symbol: string): number | null {
 	if (row.symbol_a === symbol) return row.alloc_a_pct;
 	if (row.symbol_b === symbol) return row.alloc_b_pct;
@@ -54,5 +68,7 @@ export function mapSignalsApiRows(rows: SignalsApiRow[]): LiveSignal[] {
 		const mapped = mapSignalsApiRowToLiveSignal(row);
 		if (mapped) out.push(mapped);
 	}
-	return dedupeSignalsBySlugNewest(out, (s) => s.generatedAt);
+	const deduped = dedupeSignalsBySlugNewest(out, (s) => s.generatedAt);
+	deduped.sort(compareLiveSignalsListOrder);
+	return deduped;
 }
